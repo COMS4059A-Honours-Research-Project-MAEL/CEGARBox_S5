@@ -1,0 +1,17 @@
+!/**/
+!*.*
+*.p
+*.1cf
+*.out
+*.txt
+*.intohylo
+*.a
+*.cf
+*.hf
+.vscode
+main
+.cache
+callgrind*
+.ccls
+*.o
+massif*
