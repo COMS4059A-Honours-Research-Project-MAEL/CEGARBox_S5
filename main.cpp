@@ -23,7 +23,7 @@
 #include "Formula/Or/Or.h"
 #include "Formula/True/True.h"
 #include "ParseFormula/ParseFormula.h"
-#include "ParseFormulaNew/ParseFormulaNew.h"
+// #include "ParseFormulaNew/ParseFormulaNew.h"
 #include "Prover/TrieformProver/TrieformProverK/TrieformProverK.h"
 #include "Prover/TrieformProver/TrieformProverKDag/TrieformProverKDag.h"
 #include "Prover/TrieformProver/TrieformProverKGlobal/TrieformProverKGlobal.h"
