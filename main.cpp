@@ -121,10 +121,7 @@ int main(int argc, char *argv[]) {
     arguments_struct arguments;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
-    // solve(arguments);
-
-    shared_ptr<Formula> formula = ParseFormula(&arguments.filename).parseFormula();
-    cout << "Parsed: " << formula->toString() << endl;    
+    solve(arguments);   
 }
 
 void solve(arguments_struct &args) {
