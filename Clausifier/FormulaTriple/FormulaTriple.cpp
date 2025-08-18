@@ -64,9 +64,9 @@ void FormulaTriple::removeTrueAndFalse() {
   clause_set newClauses;
   for (Clause clause : clauses) {
     if (clause.formula->getType() == FTrue) {
-      clause.formula = Not::create(Atom::create("$false"));
+      clause.formula = Not::create(Atom::create("false"));
     } else if (clause.formula->getType() == FFalse) {
-      clause.formula = Atom::create("$false");
+      clause.formula = Atom::create("false");
     }
     newClauses.insert(clause);
   }
@@ -75,14 +75,14 @@ void FormulaTriple::removeTrueAndFalse() {
   modal_clause_set newBoxClauses;
   for (ModalClause clause : boxClauses) {
     if (clause.left->getType() == FTrue) {
-      clause.left = Not::create(Atom::create("$false"));
+      clause.left = Not::create(Atom::create("false"));
     } else if (clause.left->getType() == FFalse) {
-      clause.left = Atom::create("$false");
+      clause.left = Atom::create("false");
     }
     if (clause.right->getType() == FTrue) {
-      clause.right = Not::create(Atom::create("$false"));
+      clause.right = Not::create(Atom::create("false"));
     } else if (clause.right->getType() == FFalse) {
-      clause.right = Atom::create("$false");
+      clause.right = Atom::create("false");
     }
     newBoxClauses.insert(clause);
   }
@@ -91,14 +91,14 @@ void FormulaTriple::removeTrueAndFalse() {
   modal_clause_set newDiamondClauses;
   for (ModalClause clause : diamondClauses) {
     if (clause.left->getType() == FTrue) {
-      clause.left = Not::create(Atom::create("$false"));
+      clause.left = Not::create(Atom::create("false"));
     } else if (clause.left->getType() == FFalse) {
-      clause.left = Atom::create("$false");
+      clause.left = Atom::create("false");
     }
     if (clause.right->getType() == FTrue) {
-      clause.right = Not::create(Atom::create("$false"));
+      clause.right = Not::create(Atom::create("false"));
     } else if (clause.right->getType() == FFalse) {
-      clause.right = Atom::create("$false");
+      clause.right = Atom::create("false");
     }
     newDiamondClauses.insert(clause);
   }
@@ -112,13 +112,13 @@ vector<string> FormulaTriple::toStringComponents() const {
   }
 
   for (ModalClause boxClause : boxClauses) {
-    components.push_back(boxClause.left->toString() + " -> [" +
+    components.push_back(boxClause.left->toString() + " -> [r" +
                          to_string(boxClause.modality) + "]" +
                          boxClause.right->toString());
   }
 
   for (ModalClause diamondClause : diamondClauses) {
-    components.push_back(diamondClause.left->toString() + " -> <" +
+    components.push_back(diamondClause.left->toString() + " -> <r" +
                          to_string(diamondClause.modality) + ">" +
                          diamondClause.right->toString());
   }

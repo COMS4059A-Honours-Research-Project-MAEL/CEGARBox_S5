@@ -7,7 +7,7 @@ False::~False() {
 #endif
 }
 
-string False::toString() const { return "$false"; }
+string False::toString() const { return "false"; }
 
 FormulaType False::getType() const { return FFalse; }
 

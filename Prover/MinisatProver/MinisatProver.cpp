@@ -43,7 +43,7 @@ modal_names_map MinisatProver::prepareSAT(FormulaTriple clauses,
 }
 
 void MinisatProver::prepareFalse() {
-    calcSolver->addClause(~Minisat::mkLit(createOrGetVariable("$false")));
+    calcSolver->addClause(~Minisat::mkLit(createOrGetVariable("false")));
 }
 
 void MinisatProver::prepareExtras(name_set extra) {

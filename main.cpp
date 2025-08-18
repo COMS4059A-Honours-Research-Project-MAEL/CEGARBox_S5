@@ -23,7 +23,6 @@
 #include "Formula/Or/Or.h"
 #include "Formula/True/True.h"
 #include "ParseFormula/ParseFormula.h"
-// #include "ParseFormulaNew/ParseFormulaNew.h"
 #include "Prover/TrieformProver/TrieformProverK/TrieformProverK.h"
 #include "Prover/TrieformProver/TrieformProverKDag/TrieformProverKDag.h"
 #include "Prover/TrieformProver/TrieformProverKGlobal/TrieformProverKGlobal.h"
@@ -122,7 +121,7 @@ int main(int argc, char *argv[]) {
     arguments_struct arguments;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
-    solve(arguments);
+    solve(arguments);   
 }
 
 void solve(arguments_struct &args) {

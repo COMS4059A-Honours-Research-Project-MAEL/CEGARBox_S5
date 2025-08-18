@@ -449,7 +449,7 @@ string Trieform::toString() {
     for (int mod : modality) {
         if (mod != previousSeenModality) {
             if (count > 0) {
-                levelModality += "[" + to_string(previousSeenModality) + "]^" +
+                levelModality += "[r" + to_string(previousSeenModality) + "]^" +
                                  to_string(count);
             }
             count = 1;
@@ -460,7 +460,7 @@ string Trieform::toString() {
     }
     if (count > 0) {
         levelModality +=
-            "[" + to_string(previousSeenModality) + "]^" + to_string(count);
+            "[r" + to_string(previousSeenModality) + "]^" + to_string(count);
     }
 
     string trieString = "";
