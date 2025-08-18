@@ -1,6 +1,6 @@
 #include "Cache.h"
 
-Cache::Cache(string prepend) { name = "$" + prepend; }
+Cache::Cache(string prepend) { name = prepend; }
 
 Cache::~Cache() {}
 
@@ -84,7 +84,7 @@ string Cache::toString() const {
       if (mod != previousSeenModality) {
         if (count > 0) {
           levelModality +=
-              "[" + to_string(previousSeenModality) + "]^" + to_string(count);
+              "[r" + to_string(previousSeenModality) + "]^" + to_string(count);
         }
         count = 1;
         previousSeenModality = mod;
@@ -94,7 +94,7 @@ string Cache::toString() const {
     }
     if (count > 0) {
       levelModality +=
-          "[" + to_string(previousSeenModality) + "]^" + to_string(count);
+          "[r" + to_string(previousSeenModality) + "]^" + to_string(count);
     }
     if (levelModality.size() == 0) {
       cacheString +=

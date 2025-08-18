@@ -48,11 +48,10 @@ shared_ptr<Formula> ParseFormula::parseRest() {
   } else if (getChar() == '[') {
     ++index;
     string modality;
-    if (getChar() == '-') {
-      modality = "-";
+    
+    if (getChar() == 'r') {
+      modality = "r";
       ++index;
-    } else {
-      string modality = "";
     }
 
     while (isdigit(getChar())) {
@@ -86,21 +85,19 @@ shared_ptr<Formula> ParseFormula::parseRest() {
     } else {
       if (rest->getType() == FBox) {
         Box *restBox = dynamic_cast<Box *>(rest.get());
-        if (restBox->getModality() == stoi(modality)) {
+        if (restBox->getModality() == stoi(modality.substr(1, modality.length() - 1))) {
           restBox->incrementPower();
           return rest;
         }
       }
-      return Box::create(stoi(modality), 1, rest);
+      return Box::create(stoi(modality.substr(1, modality.length() - 1)), 1, rest);
     }
   } else if (getChar() == '<') {
     ++index;
     string modality;
-    if (getChar() == '-') {
-      modality = "-";
+    if (getChar() == 'r') {
+      modality = "r";
       ++index;
-    } else {
-      string modality = "";
     }
 
     while (isdigit(getChar())) {
@@ -134,26 +131,27 @@ shared_ptr<Formula> ParseFormula::parseRest() {
     } else {
       if (rest->getType() == FDiamond) {
         Diamond *restDiamond = dynamic_cast<Diamond *>(rest.get());
-        if (restDiamond->getModality() == stoi(modality)) {
+        if (restDiamond->getModality() == stoi(modality.substr(1, modality.length() - 1))) {
           restDiamond->incrementPower();
           return rest;
         }
       }
-      return Diamond::create(stoi(modality), 1, rest);
+      return Diamond::create(stoi(modality.substr(1, modality.length() - 1)), 1, rest);
     }
   } else if (getChar() == '~') {
     ++index;
     return Not::create(parseRest());
-  } else if (file->substr(index, 5) == "$true") {
-    index += 5;
+  } else if (file->substr(index, 4) == "true") {
+    index += 4;
     return True::create();
-  } else if (file->substr(index, 6) == "$false") {
-    index += 6;
+  } else if (file->substr(index, 5) == "false") {
+    index += 5;
     return False::create();
-  } else if (isalnum(getChar()) || getChar() == '_') {
-    string name = "";
+  } else if (getChar() == 'p') {
+    string name = "p";
+    ++index;
 
-    while (isalnum(getChar()) || getChar() == '_') {
+    while (isdigit(getChar())) {
       name += getChar();
       ++index;
     }
@@ -260,7 +258,7 @@ shared_ptr<Formula> ParseFormula::parseImp() {
   while (isspace(getChar()))
     ++index;
 
-  if (file->substr(index, 2) == "=>") {
+  if (file->substr(index, 2) == "->") {
     index += 2;
     shared_ptr<Formula> right = parseImp();
 
@@ -285,7 +283,7 @@ shared_ptr<Formula> ParseFormula::parseIff() {
   while (isspace(getChar()))
     ++index;
 
-  if (file->substr(index, 3) == "<=>") {
+  if (file->substr(index, 3) == "<->") {
     index += 3;
     shared_ptr<Formula> right = parseIff();
 
@@ -309,10 +307,23 @@ shared_ptr<Formula> ParseFormula::parseIff() {
 }
 
 shared_ptr<Formula> ParseFormula::parseFormula() {
+  if (file->substr(index, 5) != "begin"){
+    throw runtime_error("Expected formula to begin with 'begin' at position: " + to_string(index));
+  }
+  else {
+    index += 5;
+  }
+
   shared_ptr<Formula> formula = parseIff();
 
   while (isspace(getChar()))
     ++index;
+
+  if (file->substr(index, 3) != "end"){
+    throw runtime_error("Expected formula to end with 'end' at position: " + to_string(index));
+  } else {
+    index += 3;
+  }
 
   if (getChar() != '%') {
     throw runtime_error("Unexpected character at position " + to_string(index) +

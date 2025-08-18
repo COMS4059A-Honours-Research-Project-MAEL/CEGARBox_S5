@@ -37,7 +37,7 @@ void Box::incrementPower() { power_++; }
 
 string Box::toString() const {
     string ret = "";
-    for (int i = 0; i < power_; ++i) ret += "[" + to_string(modality_) + "]";
+    for (int i = 0; i < power_; ++i) ret += "[r" + to_string(modality_) + "]";
     return ret + subformula_->toString();
          
 }

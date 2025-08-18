@@ -7,7 +7,7 @@ True::~True() {
 #endif
 }
 
-string True::toString() const { return "$true"; }
+string True::toString() const { return "true"; }
 
 FormulaType True::getType() const { return FTrue; }
 
