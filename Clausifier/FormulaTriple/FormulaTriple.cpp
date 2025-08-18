@@ -77,7 +77,7 @@ void FormulaTriple::removeTrueAndFalse() {
     if (clause.left->getType() == FTrue) {
       clause.left = Not::create(Atom::create("false"));
     } else if (clause.left->getType() == FFalse) {
-      clause.left = Atom::create("$alse");
+      clause.left = Atom::create("false");
     }
     if (clause.right->getType() == FTrue) {
       clause.right = Not::create(Atom::create("false"));
