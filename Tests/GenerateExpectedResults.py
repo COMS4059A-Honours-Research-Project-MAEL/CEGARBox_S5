@@ -3,8 +3,8 @@ import os
 import json
 import argparse
 
-# Path to Python solver directory
-s5_dir = os.path.abspath(os.path.join("..", "S5PY"))
+# Path to S5 Solver
+SOLVER_dir = os.path.abspath(os.path.join("..", "S5PY"))
 
 # Output file for baseline results
 OUTPUT_FILE = os.path.join("Tests", "ExpectedResults.json")
@@ -13,7 +13,7 @@ OUTPUT_FILE = os.path.join("Tests", "ExpectedResults.json")
 def run_solver(cnf_path):
     """Run the Python solver (`s5`) on a CNF file and return True (SATISFIABLE) or False (UNSATISFIABLE)."""
     env = os.environ.copy()
-    env["PYTHONPATH"] = f"{s5_dir}:{env.get('PYTHONPATH','')}"
+    env["PYTHONPATH"] = f"{SOLVER_dir}:{env.get('PYTHONPATH','')}"
 
     result = subprocess.run(
         ["python", "-m", "s5", cnf_path],
@@ -23,10 +23,10 @@ def run_solver(cnf_path):
         env=env
     )
 
-    stdout = result.stdout.upper()
-    if "UNSATISFIABLE" in stdout or "UNSAT" in stdout:
+    stdout = result.stdout
+    if "s UNSATISFIABLE" in stdout:
         return False
-    elif "SATISFIABLE" in stdout or "SAT" in stdout:
+    elif "s SATISFIABLE" in stdout:
         return True
     else:
         raise RuntimeError(f"Unexpected solver output for {cnf_path}:\n{result.stdout}")
