@@ -165,6 +165,7 @@ void TrieformProverS5::propagateSymmetricBoxes() {
   }
 }
 
+// TODO: Fix preprocessing
 void TrieformProverS5::preprocess() {
   // Apply reflexivity first
   reflexiveHandleBoxClauses();
@@ -191,6 +192,7 @@ void TrieformProverS5::prepareSAT(name_set extra) {
   }
 }
 
+// TODO: Fix proving
 Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
                                  literal_set assumptions) {
   // Check solution memo
@@ -253,19 +255,11 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
           literal_set(triggeredBoxes[modalityDiamonds.first]);
       childAssumptions.insert(diamond);
 
-      // Run the solver for the next level
+      // Run the solver on current level
       history.push_back(assumptionsBitset);
-      Solution childSolution;
-      if (getLevel() == 1) {
-        childSolution = prove(history, childAssumptions);
-      } else {
-        childSolution = dynamic_cast<TrieformProverS5 *>(
-                            subtrieMap[modalityDiamonds.first].get())
-                            ->prove(history, childAssumptions);
-      }
+      Solution childSolution = prove(history, childAssumptions);
       history.pop_back();
 
-      // If it is satisfiable create the next world
       if (childSolution.satisfiable) {
         continue;
       }
@@ -274,38 +268,30 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
       vector<literal_set> badImplications = prover->getNotProblemBoxClauses(
           modalityDiamonds.first, childSolution.conflict);
 
-      if (childSolution.conflict.find(diamond) !=
-          childSolution.conflict.end()) {
+      if (childSolution.conflict.find(diamond) != childSolution.conflict.end()) {
         // The diamond clause, either on its own or together with box clauses,
         // caused a conflict. We must add diamond implies OR NOT problem box
         // clauses.
         prover->updateLastFail(diamond);
-        badImplications.push_back(
-            prover->getNotDiamondLeft(modalityDiamonds.first, diamond));
-
-        for (literal_set learnClause : generateClauses(badImplications)) {
-          prover->addClause(learnClause);
-        }
-
-        // Find new result
-        return prove(history, assumptions);
+        badImplications.push_back(prover->getNotDiamondLeft(modalityDiamonds.first, diamond));
       } else {
         // Should be able to remove this (boxes must be able to satisfied
         // because of reflexivity)
         // Only the box clauses caused a conflict, so
         // we must add each diamond clause implies OR NOT problem box lefts
-        badImplications.push_back(
-            prover->getNotAllDiamondLeft(modalityDiamonds.first));
-        // Add ~leftDiamond=>\/~leftProbemBox
-        for (literal_set learnClause : generateClauses(badImplications)) {
-          prover->addClause(learnClause);
-        }
-        // Find new result
-        return prove(history, assumptions);
+        badImplications.push_back(prover->getNotAllDiamondLeft(modalityDiamonds.first));
       }
+
+      // Add ~leftDiamond=>\/~leftProbemBox
+      for (literal_set learnClause : generateClauses(badImplications)) {
+          prover->addClause(learnClause);
+      }
+      // Find new result
+      return prove(history, assumptions);
     }
   }
   // If we reached here the solution is satisfiable under all modalities
+  updateSolutionMemo(assumptionsBitset, solution);
   return solution;
 }
 

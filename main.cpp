@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
     arguments_struct arguments;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
-    solve(arguments);   
+    solve(arguments);
 }
 
 void solve(arguments_struct &args) {
@@ -142,11 +142,6 @@ void solve(arguments_struct &args) {
 #endif
 
     shared_ptr<Formula> formula = ParseFormula(&args.filename).parseFormula();
-    // string other = "a.p";
-    // shared_ptr<Formula> correct = ParseFormula(&other).parseFormula();
-    // cout << "Wrong" << formula->toString() << endl;
-    // cout << "Right" << correct->toString() << endl;
-    // cout << (*formula == *correct) << endl;
 
     if (args.valid) {
         formula = Not::create(formula);
@@ -164,9 +159,6 @@ void solve(arguments_struct &args) {
     }
 
     formula = formula->negatedNormalForm();
-    // correct = correct->negatedNormalForm();
-
-    // cout << (*formula == *correct) << endl;
 
 #if DEBUG_TIME
     auto nnf = chrono::steady_clock::now();
@@ -181,9 +173,6 @@ void solve(arguments_struct &args) {
     }
 
     formula = formula->simplify();
-    // correct = correct->simplify();
-
-    // cout << (*formula == *correct) << endl;
 
 #if DEBUG_TIME
     auto simplify = chrono::steady_clock::now();
@@ -198,15 +187,6 @@ void solve(arguments_struct &args) {
     }
 
     formula = formula->modalFlatten();
-    /*
-    if (args.settings.euclidean) {
-        formula = formula->axiomSimplify(0, 0);
-        formula = formula->axiomSimplify(2, 0);
-    }*/
-
-    // correct = correct->modalFlatten();
-
-    // cout << (*formula == *correct) << endl;
 
 #if DEBUG_TIME
     auto flatten = chrono::steady_clock::now();
@@ -223,8 +203,19 @@ void solve(arguments_struct &args) {
     FormulaDetails formulaDetails;
     Trieform::calculateFormulaDetails(formulaDetails, formula);
 
-    shared_ptr<Trieform> trie =
-        TrieformFactory::makeTrie(formula, args.settings);
+    shared_ptr<Formula> newFormula = formula;
+    Trieform::ensureUniqueModalClauseLhs = true;
+    Trieform::stringModalContexts = true;
+
+    formula_set orSet;
+    orSet.insert(Not::create(Atom::create("$root")));
+    orSet.insert(formula);
+
+    newFormula = Or::create(orSet);
+    shared_ptr<Trieform> trie = TrieformFactory::makeTrieS5(newFormula);
+
+    // shared_ptr<Trieform> trie =
+    //     TrieformFactory::makeTrie(formula, args.settings);
     // shared_ptr<Trieform> otherTrie =
     //     TrieformFactory::makeTrie(correct, args.settings);
     if (args.verbose) {
@@ -395,7 +386,7 @@ void solve(arguments_struct &args) {
     if (args.valid) {
         cout << (satisfiable ? "Invalid" : "Valid") << endl;
     } else {
-        cout << (satisfiable ? "Satisfiable" : "Unsatisfiable") << endl;
+        cout << (satisfiable ? "s SATISFIABLE" : "s UNSATISFIABLE") << endl;
     }
     // satisfiable = otherTrie->isSatisfiable();
     // if (args.valid) {

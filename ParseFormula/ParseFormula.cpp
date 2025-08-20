@@ -53,6 +53,14 @@ shared_ptr<Formula> ParseFormula::parseRest() {
       modality = "r";
       ++index;
     }
+    else {
+      throw runtime_error("Unexpected character at position " +
+                            to_string(index) +
+                            " got " + 
+                            getChar()
+                            + " but expected r");
+    }
+
 
     while (isdigit(getChar())) {
       modality += getChar();
@@ -98,6 +106,13 @@ shared_ptr<Formula> ParseFormula::parseRest() {
     if (getChar() == 'r') {
       modality = "r";
       ++index;
+    }
+    else {
+      throw runtime_error("Unexpected character at position " +
+                            to_string(index) +
+                            " got " + 
+                            getChar()
+                            + " but expected r");
     }
 
     while (isdigit(getChar())) {
