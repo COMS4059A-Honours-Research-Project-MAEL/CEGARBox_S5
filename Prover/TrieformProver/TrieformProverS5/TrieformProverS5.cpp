@@ -4,12 +4,12 @@ shared_ptr<Cache> TrieformProverS5::persistentCache = make_shared<PrefixCache>("
 
 unsigned int TrieformProverS5::assumptionsSize = 0;
 GlobalSolutionMemo TrieformProverS5::globalMemo = GlobalSolutionMemo();
-unordered_map<string, unsigned int> TrieformProverS5::idMap =
-    unordered_map<string, unsigned int>();
+unordered_map<string, unsigned int> TrieformProverS5::idMap = unordered_map<string, unsigned int>();
+unordered_map<int, literal_set> TrieformProverS5::kripkeModel = unordered_map<int, literal_set>();
 
 shared_ptr<Trieform>
 TrieformFactory::makeTrieS5(const shared_ptr<Formula> &formula,
-                            shared_ptr<Trieform> trieParent) {
+          shared_ptr<Trieform> trieParent) {
   shared_ptr<Trieform> trie = shared_ptr<Trieform>(new TrieformProverS5());
   trie->initialise(formula, trieParent);
   return trie;
@@ -193,13 +193,10 @@ void TrieformProverS5::prepareSAT(name_set extra) {
 }
 
 // TODO: Fix proving
-Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
-                                 literal_set assumptions) {
+Solution TrieformProverS5::prove(int worldID, vector<shared_ptr<Bitset>> history, literal_set assumptions) {
   // Check solution memo
-  shared_ptr<Bitset> assumptionsBitset =
-      convertAssumptionsToBitset(assumptions);
-  GlobalSolutionMemoResult memoResult =
-      globalMemo.getFromMemo(assumptionsBitset, modality);
+  shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
+  GlobalSolutionMemoResult memoResult = globalMemo.getFromMemo(assumptionsBitset, modality);
 
   if (memoResult.inSatMemo) {
     return memoResult.result;
@@ -217,6 +214,9 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
     updateSolutionMemo(assumptionsBitset, solution);
     return solution;
   }
+
+  // Store literal valuation at world
+  kripkeModel[worldID] = prover->getModel();
 
   prover->calculateTriggeredDiamondsClauses();
   modal_literal_map triggeredDiamonds = prover->getTriggeredDiamondClauses();
@@ -238,8 +238,7 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
     }
     // Note in the cases diamonds are a subset of boxes then we don't need to
     // create any worlds (reflexivity satisfies this)
-    diamond_queue diamondPriority =
-        prover->getPrioritisedTriggeredDiamonds(modalityDiamonds.first);
+    diamond_queue diamondPriority = prover->getPrioritisedTriggeredDiamonds(modalityDiamonds.first);
     while (!diamondPriority.empty()) {
       // Create a world for each diamond if necessary
       Literal diamond = diamondPriority.top().literal;
@@ -251,13 +250,12 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
         continue;
       }
 
-      literal_set childAssumptions =
-          literal_set(triggeredBoxes[modalityDiamonds.first]);
+      literal_set childAssumptions = literal_set(triggeredBoxes[modalityDiamonds.first]);
       childAssumptions.insert(diamond);
 
       // Run the solver on current level
       history.push_back(assumptionsBitset);
-      Solution childSolution = prove(history, childAssumptions);
+      Solution childSolution = prove(worldID + 1, history, childAssumptions);
       history.pop_back();
 
       if (childSolution.satisfiable) {
@@ -265,8 +263,7 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
       }
 
       // Otherwise there must have been a conflict
-      vector<literal_set> badImplications = prover->getNotProblemBoxClauses(
-          modalityDiamonds.first, childSolution.conflict);
+      vector<literal_set> badImplications = prover->getNotProblemBoxClauses(modalityDiamonds.first, childSolution.conflict);
 
       if (childSolution.conflict.find(diamond) != childSolution.conflict.end()) {
         // The diamond clause, either on its own or together with box clauses,
@@ -287,7 +284,7 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
           prover->addClause(learnClause);
       }
       // Find new result
-      return prove(history, assumptions);
+      return prove(worldID, history, assumptions);
     }
   }
   // If we reached here the solution is satisfiable under all modalities
@@ -296,5 +293,55 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history,
 }
 
 Solution TrieformProverS5::prove(literal_set assumptions = literal_set()) {
-  return prove(vector<shared_ptr<Bitset>>(), assumptions);
+  return prove(0, vector<shared_ptr<Bitset>>(), assumptions);
+}
+
+void TrieformProverS5::printKripkeModel(){
+  unsigned int nWorlds = kripkeModel.size();
+  set<string> literal_names_set;
+  
+  for (unsigned int w = 0; w < nWorlds; w++){
+    for (auto literal : kripkeModel[w]) {
+      char c = literal.getName().empty() ? '\0' : literal.getName()[0];
+      if (c == 'P' || c == 'x' || c == '$') continue;
+
+      literal_names_set.insert(literal.getName());
+    }
+  }
+
+  for(auto literal : literal_names_set) cout << literal << " "; cout << "\n";
+
+  vector<string> literalNames(literal_names_set.begin(), literal_names_set.end());
+  sort(literalNames.begin(), literalNames.end());
+  
+  unsigned int nLiterals = literalNames.size();
+  unsigned int nEdges = nWorlds * nWorlds;
+  unsigned int nRelations = 1; // Mono-modal logic
+
+  cout << "c #var #worlds #relations #edges\n";
+  cout << "v " << nLiterals << " " << nWorlds << " " << nRelations << " " << nEdges << "\n";
+
+  for (unsigned int w = 0; w < nWorlds; w++){
+    cout << "v ";
+    vector<int> signedIds(nLiterals);
+
+    for (auto literal : kripkeModel[w]) {
+      auto it = lower_bound(literalNames.begin(), literalNames.end(), literal.getName());
+      if (it == literalNames.end() || *it != literal.getName()) continue;
+      
+      int index = static_cast<int>(it - literalNames.begin());
+      signedIds[index] = literal.getPolarity() ? (index + 1) : -(index + 1);
+    }
+
+    for (auto signedId: signedIds) cout << signedId << " ";
+    cout << "0\n";
+  }
+
+  for (unsigned int r = 1; r <= nRelations; r++){
+    for (unsigned int w = 0; w < nWorlds; w++) {
+      for (unsigned int w_ = 0; w_ < nWorlds; w_++){
+        cout << "v r" << r << " w" << w << " w" << w_ << "\n";
+      }
+    }
+  }
 }
