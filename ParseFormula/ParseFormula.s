@@ -4597,7 +4597,7 @@ _ZN12ParseFormula8parseIffEv.cold:
 .LC25:
 	.string	"true"
 .LC26:
-	.string	"false"
+	.string	"$false"
 .LC27:
 	.string	"Unexpected end of file"
 	.section	.text.unlikely

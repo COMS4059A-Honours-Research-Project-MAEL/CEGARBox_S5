@@ -1,6 +1,6 @@
 #include "Cache.h"
 
-Cache::Cache(string prepend) { name = prepend; }
+Cache::Cache(string prepend) { name = "$" + prepend; }
 
 Cache::~Cache() {}
 
