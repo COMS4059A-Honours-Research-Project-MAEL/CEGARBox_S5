@@ -12,7 +12,7 @@ EXPECTED_RESULTS_FILE = os.path.join("Tests", "ExpectedResults.json")
 def run_solver(cnf_path):
     """Run the solver on a CNF file and return True (SATISFIABLE) or False (UNSATISFIABLE)."""
     result = subprocess.run(
-        [SOLVER_BIN, "-f", cnf_path, "-t", "-5"],
+        [SOLVER_BIN, "-f", cnf_path],
         capture_output=True,
         text=True,
         check=True
