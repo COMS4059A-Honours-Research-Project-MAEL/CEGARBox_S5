@@ -23,38 +23,24 @@
 #include "Formula/Or/Or.h"
 #include "Formula/True/True.h"
 #include "ParseFormula/ParseFormula.h"
-#include "Prover/TrieformProver/TrieformProverK/TrieformProverK.h"
-#include "Prover/TrieformProver/TrieformProverKDag/TrieformProverKDag.h"
-#include "Prover/TrieformProver/TrieformProverKGlobal/TrieformProverKGlobal.h"
-#include "Prover/TrieformProver/TrieformProverKt/TrieformProverKt.h"
 #include "Prover/TrieformProver/TrieformProverS5/TrieformProverS5.h"
 
 using namespace std;
 
-const char *argp_program_version = "CEGARBox 0.1.0";
-const char *argp_program_bug_address = "cormac.kikkert@anu.edu.au";
-static char doc[] = "An efficient theorem prover for modal logic.";
+const char *argp_program_version = "CEGARBox S5 0.1.0";
+const char *argp_program_bug_address = "2584925@students.wits.ac.za";
+static char doc[] = "An efficient theorem prover for the S5 modal logic based on CEGARBox.";
 static char args_doc[] = "";
 static struct argp_option options[] = {
     {"file", 'f', "FILE", 0, "File containing input formula."},
-    {"reflexive", 't', 0, 0, "Enables reflexivity."},
-    {"symmetric", 'b', 0, 0, "Enables symmetry."},
-    {"transitive", '4', 0, 0, "Enables transitivity."},
-    {"serial", 'd', 0, 0, "Enables seriality."},
-    {"euclidean", '5', 0, 0, "Enables transitivity."},
-    {"tense", 'n', 0, 0, "Enables Tense Logic."},
     {"valid", 'a', 0, 0, "Prove validity."},
     {"onesat", '1', 0, 0, "Use 1 SAT Solver."},
-    {"localReduction", 'l', 0, 0, "Perform a local reduction into K"},
-    {"globalReduction", 'g', 0, 0, "Perform a global reduction into K"},
     {"verbose", 'v', 0, 0, "Verbosity."},
-    {"dag", 'q', 0, 0, "Use an underlying DAG datastructure."},
-    {"globalAssumptions", 'u', "FILE", 0, "File containing global assumptions"},
-    {0, 0, 0, 0, 0, 0}};
+    {0, 0, 0, 0, 0, 0}
+};
 
 struct arguments_struct {
     string filename = "file.p";
-    string globalFilename = "";
     SolverConstraints settings;
     bool valid = false;
     bool verbose = false;
@@ -66,28 +52,6 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case 'f': {
             arguments->filename = arg;
         } break;
-        case 'u': {
-            arguments->globalFilename = arg;
-            arguments->settings.usingGlobalAssumps = true;
-        } break;
-        case 't':
-            arguments->settings.reflexive = true;
-            break;
-        case 'b':
-            arguments->settings.symmetric = true;
-            break;
-        case '4':
-            arguments->settings.transitive = true;
-            break;
-        case 'd':
-            arguments->settings.serial = true;
-            break;
-        case '5':
-            arguments->settings.euclidean = true;
-            break;
-        case 'n':
-            arguments->settings.tense = true;
-            break;
         case 'a':
             arguments->valid = true;
             break;
@@ -96,15 +60,6 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             break;
         case '1':
             arguments->settings.oneSat = true;
-            break;
-        case 'l':
-            arguments->settings.localReduction = true;
-            break;
-        case 'g':
-            arguments->settings.globalReduction = true;
-            break;
-        case 'q':
-            arguments->settings.useDag = true;
             break;
         case ARGP_KEY_ARG:
             return 0;
@@ -204,21 +159,8 @@ void solve(arguments_struct &args) {
     FormulaDetails formulaDetails;
     Trieform::calculateFormulaDetails(formulaDetails, formula);
 
-    shared_ptr<Formula> newFormula = formula;
-    Trieform::ensureUniqueModalClauseLhs = true;
-    Trieform::stringModalContexts = true;
+    shared_ptr<Trieform> trie = TrieformFactory::makeTrie(formula, args.settings);
 
-    formula_set orSet;
-    orSet.insert(Not::create(Atom::create("$root")));
-    orSet.insert(formula);
-
-    newFormula = Or::create(orSet);
-    shared_ptr<Trieform> trie = TrieformFactory::makeTrieS5(newFormula);
-
-    // shared_ptr<Trieform> trie =
-    //     TrieformFactory::makeTrie(formula, args.settings);
-    // shared_ptr<Trieform> otherTrie =
-    //     TrieformFactory::makeTrie(correct, args.settings);
     if (args.verbose) {
         cout << "Constructed trie" << endl;
         cout << "Initial trie:" << endl << trie->toString() << endl;
@@ -237,10 +179,6 @@ void solve(arguments_struct &args) {
 #if DEBUG_TIME
     auto construct = chrono::steady_clock::now();
 #endif
-    // cout << "Initial trie:" << endl << trie->toString() << endl;
-    // cout << "Correct trie:" << endl << otherTrie->toString() << endl;
-
-    // otherTrie->reduceClauses();
 
 #if DEBUG_TIME
     auto reduce = chrono::steady_clock::now();
@@ -261,55 +199,9 @@ void solve(arguments_struct &args) {
         cout << "Reduced trie:" << endl << trie->toString() << endl;
         cout << "Reduced cache:" << endl << trie->getCache().toString() << endl;
     }
-    /*
-      if (args.tense) {
-        trie->preprocessTense();
-      }
-      */
 
     trie->reduceClauses();
-    if (args.settings.tense && !args.settings.localReduction) {
-        if (!args.settings.oneSat) 
-            trie = dynamic_cast<TrieformProverKt *>(trie.get())->createGridTrie();
-        else {
-            trie->oneNode();
-        }
-    }
-    trie->reduceClauses();
-
-    if (args.settings.localReduction) {
-        if (args.settings.reflexive)
-            dynamic_cast<TrieformProverK *>(trie.get())->localReductionT();
-        if (args.settings.euclidean)
-            dynamic_cast<TrieformProverK *>(trie.get())->localReduction5();
-        if (args.settings.serial)
-            dynamic_cast<TrieformProverK *>(trie.get())->localReductionD();
-        if (args.settings.symmetric)
-            dynamic_cast<TrieformProverK *>(trie.get())->localReductionB();
-        if (args.settings.transitive)
-            dynamic_cast<TrieformProverK *>(trie.get())
-                ->localReduction4(formulaDetails);
-        
-        if (args.settings.tense)
-        {
-            (args.settings.useDag) ? 
-            dynamic_cast<TrieformProverKDag *>(trie.get())->localReductionTense() : 
-            dynamic_cast<TrieformProverK *>(trie.get())
-                ->localReductionTense();
-        }
-    }
-
-    if (args.settings.globalReduction) {
-        if (args.settings.transitive)
-            dynamic_cast<TrieformProverKGlobal *>(trie.get())
-                ->globalReduction4();
-        if (args.settings.euclidean)
-            dynamic_cast<TrieformProverKGlobal *>(trie.get())
-                ->globalReduction5();
-    }
-
     trie->preprocess();
-    //  otherTrie->preprocess();
 
 #if DEBUG_PROGRESS
     cout << "Preprocessed trie" << endl;
@@ -326,48 +218,10 @@ void solve(arguments_struct &args) {
 
     trie->removeTrueAndFalse();
 
-
-    {
-        if (args.globalFilename != "") {
-            shared_ptr<Formula> gFormula = ParseFormula(&args.globalFilename).parseFormula();
-
-
-            if (args.valid) {
-                gFormula = Not::create(gFormula);
-            }
-
-            Trieform::stringModalContexts = true;
-            formula_set orSet;
-            orSet.insert(Not::create(Atom::create("$root")));
-            orSet.insert(gFormula);
-            gFormula = Or::create(orSet);
-
-            gFormula = gFormula->negatedNormalForm();
-            gFormula = gFormula->simplify();
-            gFormula = gFormula->modalFlatten();
-
-            shared_ptr<Trieform> gTrie =
-                TrieformFactory::makeTrie(gFormula, args.settings);
-            gTrie->reduceClauses();
-            gTrie->oneNode(); // TODO: DOUBLE CHECK THIS!!!
-            gTrie->propRoot();
-            dynamic_cast<TrieformProverKGlobal *> (gTrie.get())->cutReflexiveLeaves(gTrie);
-            gTrie->unravel(2, false);
-            gTrie->preprocess();
-            gTrie->removeTrueAndFalse();
-
-            dynamic_cast<TrieformProverKGlobal *> (trie.get())->addGlobalAssumptions(gTrie);
-            trie->reduceClauses();
-            //dynamic_cast<TrieformProverKGlobal *> (trie.get())->cutReflexiveLeaves(gTrie);
-        }
-    }
-
-    // otherTrie->removeTrueAndFalse();
     if (Trieform::stringModalContexts)
         trie->prepareSAT(name_set{"$root"});
     else
         trie->prepareSAT();
-        // otherTrie->prepareSAT();
 
 #if DEBUG_TIME
     auto prepare = chrono::steady_clock::now();
@@ -381,8 +235,7 @@ void solve(arguments_struct &args) {
         cout << "Prepared SAT" << endl;
     }
    
-    bool satisfiable = trie->isSatisfiable(
-        Trieform::stringModalContexts);
+    bool satisfiable = trie->isSatisfiable(Trieform::stringModalContexts);
 
     if (args.valid) {
         cout << (satisfiable ? "Invalid" : "Valid") << endl;
