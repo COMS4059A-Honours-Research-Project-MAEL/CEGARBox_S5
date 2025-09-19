@@ -5,7 +5,10 @@ shared_ptr<Cache> TrieformProverS5::persistentCache = make_shared<PrefixCache>("
 unsigned int TrieformProverS5::assumptionsSize = 0;
 GlobalSolutionMemo TrieformProverS5::globalMemo = GlobalSolutionMemo();
 unordered_map<string, unsigned int> TrieformProverS5::idMap = unordered_map<string, unsigned int>();
+
+unsigned int TrieformProverS5::nextWorldId = 0;
 unordered_map<int, literal_set> TrieformProverS5::kripkeModel = unordered_map<int, literal_set>();
+unordered_map<int, unordered_set<int>> TrieformProverS5::relations = {};
 
 shared_ptr<Trieform>
 TrieformFactory::makeTrieS5(const shared_ptr<Formula> &formula,
@@ -192,8 +195,8 @@ void TrieformProverS5::prepareSAT(name_set extra) {
   }
 }
 
-// TODO: Fix proving
-Solution TrieformProverS5::prove(int worldID, vector<shared_ptr<Bitset>> history, literal_set assumptions) {
+
+Solution TrieformProverS5::prove(int parentWorldID, vector<shared_ptr<Bitset>> history, literal_set assumptions) {
   // Check solution memo
   shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
   GlobalSolutionMemoResult memoResult = globalMemo.getFromMemo(assumptionsBitset, modality);
@@ -216,7 +219,12 @@ Solution TrieformProverS5::prove(int worldID, vector<shared_ptr<Bitset>> history
   }
 
   // Store literal valuation at world
-  kripkeModel[worldID] = prover->getModel();
+  vector<int> createdWorlds;
+  int thisWorldID = createWorld(prover->getModel());
+  createdWorlds.push_back(thisWorldID);
+
+  // connect to parent if present
+  if (parentWorldID >= 0) relations[parentWorldID].insert(thisWorldID);
 
   prover->calculateTriggeredDiamondsClauses();
   modal_literal_map triggeredDiamonds = prover->getTriggeredDiamondClauses();
@@ -255,12 +263,18 @@ Solution TrieformProverS5::prove(int worldID, vector<shared_ptr<Bitset>> history
 
       // Run the solver on current level
       history.push_back(assumptionsBitset);
-      Solution childSolution = prove(worldID + 1, history, childAssumptions);
+      Solution childSolution = prove(thisWorldID, history, childAssumptions);
       history.pop_back();
 
       if (childSolution.satisfiable) {
         continue;
       }
+
+      vector<int> toRemove;
+      for (auto &p : kripkeModel) {
+          if (p.first >= thisWorldID) toRemove.push_back(p.first);
+      }
+      removeWorlds(toRemove);
 
       // Otherwise there must have been a conflict
       vector<literal_set> badImplications = prover->getNotProblemBoxClauses(modalityDiamonds.first, childSolution.conflict);
@@ -284,7 +298,7 @@ Solution TrieformProverS5::prove(int worldID, vector<shared_ptr<Bitset>> history
           prover->addClause(learnClause);
       }
       // Find new result
-      return prove(worldID, history, assumptions);
+      return prove(parentWorldID, history, assumptions);
     }
   }
   // If we reached here the solution is satisfiable under all modalities
@@ -293,8 +307,32 @@ Solution TrieformProverS5::prove(int worldID, vector<shared_ptr<Bitset>> history
 }
 
 Solution TrieformProverS5::prove(literal_set assumptions = literal_set()) {
-  return prove(0, vector<shared_ptr<Bitset>>(), assumptions);
+  return prove(-1, vector<shared_ptr<Bitset>>(), assumptions);
 }
+
+// Create a new world and return its id
+int TrieformProverS5::createWorld(const literal_set &valuation) {
+    int id = static_cast<int>(nextWorldId++);
+    kripkeModel[id] = valuation;
+    // ensure relations row exists
+    relations[id]; // default-construct empty set
+    return id;
+}
+
+// Remove a set of worlds (used on backtrack)
+void TrieformProverS5::removeWorlds(const vector<int> &ids) {
+    for (int id : ids) {
+        kripkeModel.erase(id);
+        // remove relations from this id
+        relations.erase(id);
+        // remove incoming edges pointing to id
+        for (auto &p : relations) {
+            p.second.erase(id);
+        }
+    }
+    nextWorldId -= ids.size();
+}
+
 
 void TrieformProverS5::printKripkeModel(){
   unsigned int nWorlds = kripkeModel.size();
@@ -308,9 +346,7 @@ void TrieformProverS5::printKripkeModel(){
       literal_names_set.insert(literal.getName());
     }
   }
-
-  for(auto literal : literal_names_set) cout << literal << " "; cout << "\n";
-
+  
   vector<string> literalNames(literal_names_set.begin(), literal_names_set.end());
   sort(literalNames.begin(), literalNames.end());
   
