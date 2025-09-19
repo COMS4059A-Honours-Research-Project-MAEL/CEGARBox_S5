@@ -27,6 +27,7 @@
 #include "Prover/TrieformProver/TrieformProverKDag/TrieformProverKDag.h"
 #include "Prover/TrieformProver/TrieformProverKGlobal/TrieformProverKGlobal.h"
 #include "Prover/TrieformProver/TrieformProverKt/TrieformProverKt.h"
+#include "Prover/TrieformProver/TrieformProverS5/TrieformProverS5.h"
 
 using namespace std;
 
@@ -386,14 +387,14 @@ void solve(arguments_struct &args) {
     if (args.valid) {
         cout << (satisfiable ? "Invalid" : "Valid") << endl;
     } else {
-        cout << (satisfiable ? "s SATISFIABLE" : "s UNSATISFIABLE") << endl;
+        if (satisfiable) {
+            cout << "s SATISFIABLE" << endl;
+            dynamic_cast<TrieformProverS5* >(trie.get())->printKripkeModel();
+        }
+        else {
+            cout << "s UNSATISFIABLE" << endl;
+        }
     }
-    // satisfiable = otherTrie->isSatisfiable();
-    // if (args.valid) {
-    //   cout << (satisfiable ? "Invalid" : "Valid") << endl;
-    // } else {
-    //   cout << (satisfiable ? "Satisfiable" : "Unsatisfiable") << endl;
-    // }
 
 #if DEBUG_TIME
     auto solve = chrono::steady_clock::now();

@@ -1,13 +1,21 @@
 #include "ParseFormula.h"
 #include <string.h>
 #include <string>
+#include <fstream>
+#include <sstream>
 
 ParseFormula::ParseFormula(string *str) {
-  ifstream formulaFile(*str);
+  std::ifstream formulaFile(*str);
+  if (!formulaFile) {
+      throw std::runtime_error("Could not open file: " + *str);
+  }
 
-  getline(formulaFile, s);
+  std::ostringstream buffer;
+  buffer << formulaFile.rdbuf();
+  s = buffer.str();
   file = &s;
-  formulaFile.close();
+
+  index = 0;
 }
 
 ParseFormula::~ParseFormula() { // Deletion happens in main
@@ -322,23 +330,22 @@ shared_ptr<Formula> ParseFormula::parseIff() {
 }
 
 shared_ptr<Formula> ParseFormula::parseFormula() {
-  if (file->substr(index, 5) != "begin"){
-    throw runtime_error("Expected formula to begin with 'begin' at position: " + to_string(index));
+  while (isspace(getChar()) || getChar() == '\n') ++index;
+  if (file->substr(index, 5) != "begin") {
+      throw runtime_error("Expected 'begin' at position " + to_string(index));
   }
-  else {
-    index += 5;
-  }
+  index += 5;
 
   shared_ptr<Formula> formula = parseIff();
 
-  while (isspace(getChar()))
-    ++index;
+  while (isspace(getChar()) || getChar() == '\n') ++index;
 
   if (file->substr(index, 3) != "end"){
     throw runtime_error("Expected formula to end with 'end' at position: " + to_string(index));
-  } else {
-    index += 3;
-  }
+  } 
+  index += 4;
+
+  while (isspace(getChar()) || getChar() == '\n') ++index;
 
   if (getChar() != '%') {
     throw runtime_error("Unexpected character at position " + to_string(index) +
