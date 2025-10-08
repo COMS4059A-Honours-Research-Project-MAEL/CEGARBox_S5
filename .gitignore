@@ -9,9 +9,14 @@
 *.cf
 *.hf
 .vscode
+.venv
 main
 .cache
 callgrind*
 .ccls
 *.o
 massif*
+/__pycache__
+/__pycache__/*
+.pytest_cache
+*.pyc

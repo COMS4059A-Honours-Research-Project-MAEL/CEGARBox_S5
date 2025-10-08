@@ -1,5 +1,5 @@
-#ifndef PARSE_FORMULA_H
-#define PARSE_FORMULA_H
+#ifndef PARSER_H
+#define PARSER_H
 
 #include "../Formula/And/And.h"
 #include "../Formula/Atom/Atom.h"
@@ -10,6 +10,7 @@
 #include "../Formula/Not/Not.h"
 #include "../Formula/Or/Or.h"
 #include "../Formula/True/True.h"
+#include "Lexer.h"
 #include <assert.h>
 #include <fstream>
 #include <memory>
@@ -19,25 +20,21 @@
 
 using namespace std;
 
-class ParseFormula {
+class Parser {
 private:
+  Lexer lexer;
+  Token currentToken;
+
+  void consume(TokenType expectedType);
+
   shared_ptr<Formula> parseIff();
   shared_ptr<Formula> parseImp();
   shared_ptr<Formula> parseOr();
   shared_ptr<Formula> parseAnd();
   shared_ptr<Formula> parseRest();
 
-  char getChar();
-
-  bool compare(string compareString);
-  string s;
-  string *file;
-  size_t index = 0;
-
 public:
-  ParseFormula(string *str);
-  ~ParseFormula();
-
+  Parser(const string& filename);
   shared_ptr<Formula> parseFormula();
 };
 

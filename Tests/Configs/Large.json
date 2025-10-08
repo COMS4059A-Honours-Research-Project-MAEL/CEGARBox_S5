@@ -1,5 +1,5 @@
 {
-    "num_problems": 40,
+    "num_problems": 200,
     "max_depth": 6,          
     "num_boxes": 1,          
     "num_clauses": 30,       
