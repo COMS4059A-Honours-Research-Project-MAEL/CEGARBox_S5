@@ -22,7 +22,7 @@
 #include "Formula/Not/Not.h"
 #include "Formula/Or/Or.h"
 #include "Formula/True/True.h"
-#include "ParseFormula/ParseFormula.h"
+#include "ParseFormula/Parser.h"
 #include "Prover/TrieformProver/TrieformProverS5/TrieformProverS5.h"
 
 using namespace std;
@@ -97,7 +97,7 @@ void solve(arguments_struct &args) {
     auto read = chrono::steady_clock::now();
 #endif
 
-    shared_ptr<Formula> formula = ParseFormula(&args.filename).parseFormula();
+    shared_ptr<Formula> formula = Parser(args.filename).parseFormula();
 
     if (args.valid) {
         formula = Not::create(formula);
