@@ -240,13 +240,7 @@ void solve(arguments_struct &args) {
     if (args.valid) {
         cout << (satisfiable ? "Invalid" : "Valid") << endl;
     } else {
-        if (satisfiable) {
-            cout << "s SATISFIABLE" << endl;
-            dynamic_cast<TrieformProverS5* >(trie.get())->printKripkeModel();
-        }
-        else {
-            cout << "s UNSATISFIABLE" << endl;
-        }
+        cout << (satisfiable ? "s SATISFIABLE" : "s UNSATISFIABLE") << endl;
     }
 
 #if DEBUG_TIME

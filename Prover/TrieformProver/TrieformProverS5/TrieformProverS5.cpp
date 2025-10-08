@@ -5,7 +5,6 @@ shared_ptr<Cache> TrieformProverS5::persistentCache = make_shared<PrefixCache>("
 unsigned int TrieformProverS5::assumptionsSize = 0;
 GlobalSolutionMemo TrieformProverS5::globalMemo = GlobalSolutionMemo();
 unordered_map<string, unsigned int> TrieformProverS5::idMap = unordered_map<string, unsigned int>();
-KripkeModelS5 TrieformProverS5::model = KripkeModelS5();
 
 shared_ptr<Trieform>
 TrieformFactory::makeTrieS5(const shared_ptr<Formula> &formula,
@@ -98,17 +97,7 @@ void TrieformProverS5::prepareSAT(name_set extra) {
 
 
 Solution TrieformProverS5::prove(literal_set assumptions = literal_set()) {
-
-  shared_ptr<TraceNode> root = make_shared<TraceNode>();
-  root->parent = nullptr;
-  
-  Solution solution = prove(root, vector<shared_ptr<Bitset>>(), assumptions);
-
-  if (!solution.satisfiable) return solution;
-
-  buildKripkeFromTrace(root);
-
-  return solution;
+  return prove(vector<shared_ptr<Bitset>>(), assumptions);
 }
 
 
@@ -117,7 +106,7 @@ inline bool isAuxiliaryLiteral(const string& name) {
 }
 
 
-Solution TrieformProverS5::prove(const shared_ptr<TraceNode>& node, vector<shared_ptr<Bitset>> history, literal_set assumptions) {
+Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set assumptions) {
   // Check solution memo
   shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
   GlobalSolutionMemoResult memoResult = globalMemo.getFromMemo(assumptionsBitset, modality);
@@ -137,8 +126,6 @@ Solution TrieformProverS5::prove(const shared_ptr<TraceNode>& node, vector<share
     updateSolutionMemo(assumptionsBitset, solution);
     return solution;
   }
-
-  node->valuation = prover->getModel();
 
   prover->calculateTriggeredDiamondsClauses();
   modal_literal_map triggeredDiamonds = prover->getTriggeredDiamondClauses();
@@ -175,24 +162,14 @@ Solution TrieformProverS5::prove(const shared_ptr<TraceNode>& node, vector<share
       literal_set childAssumptions = literal_set(triggeredBoxes[modalityDiamonds.first]);
       childAssumptions.insert(diamond);
 
-      shared_ptr<TraceNode> child = make_shared<TraceNode>();
-      child->parent = node;
-      node->children.push_back(child);
-      node->causeDiamonds.push_back(diamond);
-
-
       // Run the solver on current level
       history.push_back(assumptionsBitset);
-      Solution childSolution = prove(child, history, childAssumptions);
+      Solution childSolution = prove(history, childAssumptions);
       history.pop_back();
 
       if (childSolution.satisfiable) {
         continue;
       }
-
-      // Remove all worlds created from the current world
-      node->children.pop_back();
-      node->causeDiamonds.pop_back();
 
       // Otherwise there must have been a conflict
       vector<literal_set> badImplications = prover->getNotProblemBoxClauses(modalityDiamonds.first, childSolution.conflict);
@@ -217,8 +194,7 @@ Solution TrieformProverS5::prove(const shared_ptr<TraceNode>& node, vector<share
       }
 
       // Find new result
-      // goto restart;
-      return prove(node, history, assumptions);
+      return prove(history, assumptions);
     }
   }
 
@@ -226,91 +202,6 @@ Solution TrieformProverS5::prove(const shared_ptr<TraceNode>& node, vector<share
   // If we reached here the solution is satisfiable under all modalities  
   updateSolutionMemo(assumptionsBitset, solution);
   return solution;
-}
-
-void TrieformProverS5::buildKripkeFromTrace(const std::shared_ptr<TraceNode>& root) {
-    if (!root) {
-        return;
-    }
-    
-    // 1. Reset the model and caches for a fresh build.
-    nodeToWorldIdCache.clear();
-
-    // Tracks unique valuations via their signatures to avoid creating duplicate worlds.
-    std::unordered_map<std::string, unsigned int> signatureToWorldId;
-
-    // 2. Start the recursive build process.
-    buildModelRecursive(root, signatureToWorldId);
-
-    // 3. Finalize the model by making accessibility an equivalence relation (S5).
-    model.finalizeToS5();
-}
-
-// --- Private Helper Methods ---
-
-std::string TrieformProverS5::getValuationSignature(const literal_set& valuation) const {
-    std::vector<std::string> names;
-    names.reserve(valuation.size()); // Pre-allocate memory to avoid reallocations.
-
-    for (const auto& lit : valuation) {
-        if (isAuxiliaryLiteral(lit.getName())) {
-            continue; // Skip internal/auxiliary literals.
-        }
-        // Prepend "-" for negative literals to ensure uniqueness.
-        names.push_back((lit.getPolarity() ? "" : "-") + lit.getName());
-    }
-
-    // Sorting ensures that valuations with the same literals in a different
-    // order (e.g., {p, q} and {q, p}) produce the same signature.
-    std::sort(names.begin(), names.end());
-
-    // Use a stringstream for more efficient string concatenation.
-    std::stringstream signatureStream;
-    for (size_t i = 0; i < names.size(); ++i) {
-        signatureStream << names[i] << (i < names.size() - 1 ? "|" : "");
-    }
-    return signatureStream.str();
-}
-
-unsigned int TrieformProverS5::buildModelRecursive(
-    const std::shared_ptr<TraceNode>& currentNode,
-    std::unordered_map<std::string, unsigned int>& signatureToWorldId
-) {
-    // Use the cache to avoid re-processing an already-visited node.
-    if (auto it = nodeToWorldIdCache.find(currentNode); it != nodeToWorldIdCache.end()) {
-        return it->second;
-    }
-
-    // === Step A: Get or create the world for the current node ===
-    const std::string signature = getValuationSignature(currentNode->valuation);
-    
-    unsigned int sourceWorldId;
-
-    // Use try_emplace (C++17) to efficiently find a key or insert it if absent.
-    // This avoids doing a separate find() and then insert().
-    auto [iterator, inserted] = signatureToWorldId.try_emplace(signature, 0);
-
-    if (inserted) {
-        // First time seeing this valuation: create a new world.
-        int newWorldId = model.createWorld(currentNode->valuation);
-        sourceWorldId = static_cast<unsigned int>(newWorldId);
-        iterator->second = sourceWorldId; // Store the new ID in the map.
-    } else {
-        // A world for this valuation already exists; reuse its ID.
-        sourceWorldId = iterator->second;
-    }
-    
-    // Cache the resulting world ID for this specific trace node.
-    nodeToWorldIdCache[currentNode] = sourceWorldId;
-
-    // === Step B: Recurse on children and add accessibility edges ===
-    for (const auto& childNode : currentNode->children) {
-        // The recursive call ensures the child's world is created and returns its ID.
-        unsigned int targetWorldId = buildModelRecursive(childNode, signatureToWorldId);
-        model.addEdge(sourceWorldId, targetWorldId);
-    }
-    
-    return sourceWorldId;
 }
 
 
@@ -408,9 +299,4 @@ void TrieformProverS5::propagateSymmetricBoxes() {
           clauses.addBoxClause(boxClause.modality, boxClause.right->negate(), boxClause.left->negate());
       }
   }
-}
-
-
-void TrieformProverS5::printKripkeModel(){
-  model.print();
 }
