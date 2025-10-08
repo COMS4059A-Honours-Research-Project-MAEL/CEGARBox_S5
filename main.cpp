@@ -22,7 +22,7 @@
 #include "Formula/Not/Not.h"
 #include "Formula/Or/Or.h"
 #include "Formula/True/True.h"
-#include "ParseFormula/Parser.h"
+#include "FormulaParser/Parser.h"
 #include "Prover/TrieformProver/TrieformProverS5/TrieformProverS5.h"
 
 using namespace std;

@@ -5,7 +5,6 @@
 #include "../../../Clausifier/Trieform/Trieform.h"
 #include "../../../Clausifier/TrieformFactory/TrieformFactory.h"
 #include "../../GlobalSolutionMemo/GlobalSolutionMemo.h"
-#include "../../KripkeModel/KripkeModelS5/KripkeModelS5.h"
 #include <memory>
 #include <string>
 #include <unordered_map>
