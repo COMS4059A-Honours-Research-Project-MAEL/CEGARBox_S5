@@ -23,6 +23,7 @@
 #include "Formula/Or/Or.h"
 #include "Formula/True/True.h"
 #include "FormulaParser/Parser.h"
+#include "FormulaParser/Parser.h"
 #include "Prover/TrieformProver/TrieformProverS5/TrieformProverS5.h"
 
 using namespace std;
