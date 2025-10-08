@@ -9,6 +9,7 @@
 *.cf
 *.hf
 .vscode
+.venv
 main
 .cache
 callgrind*
