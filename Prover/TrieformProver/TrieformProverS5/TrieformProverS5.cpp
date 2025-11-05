@@ -59,16 +59,6 @@ TrieformProverS5::convertAssumptionsToBitset(literal_set literals) {
 }
 
 
-void TrieformProverS5::updateSolutionMemo(const shared_ptr<Bitset> &assumptions,
-                                          Solution solution) {
-  // if (solution.satisfiable) {
-  //   globalMemo.insertSat(assumptions, modality);
-  // } else {
-  //   globalMemo.insertUnsat(assumptions, solution.conflict, modality);
-  // }
-}
-
-
 bool TrieformProverS5::isInHistory(vector<shared_ptr<Bitset>> history,
                                    shared_ptr<Bitset> bitset) {
   for (shared_ptr<Bitset> assump : history) {
@@ -114,7 +104,6 @@ void TrieformProverS5::printModel() {
 }
 
 
-Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set assumptions) {
 Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set assumptions) {
   // Check solution memo
   shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
@@ -172,7 +161,6 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
 
       // Run the solver on current level
       history.push_back(assumptionsBitset);
-      Solution childSolution = prove(history, childAssumptions);
       Solution childSolution = prove(history, childAssumptions);
       history.pop_back();
 

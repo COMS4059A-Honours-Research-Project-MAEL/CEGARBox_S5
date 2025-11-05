@@ -5,6 +5,7 @@
 #include "../../../Clausifier/Trieform/Trieform.h"
 #include "../../../Clausifier/TrieformFactory/TrieformFactory.h"
 #include "../../GlobalSolutionMemo/GlobalSolutionMemo.h"
+#include "../../KripkeModel/KripkeModelS5/KripkeModelS5.h"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -23,7 +24,6 @@ protected:
   static shared_ptr<Node> root;
 
   shared_ptr<Bitset> convertAssumptionsToBitset(literal_set literals);
-  void updateSolutionMemo(const shared_ptr<Bitset> &assumptions, Solution solution);
   bool isInHistory(vector<shared_ptr<Bitset>> history, shared_ptr<Bitset> bitset);
 
   void reflexiveHandleBoxClauses();
