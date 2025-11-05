@@ -23,6 +23,7 @@ typedef unordered_map<int, name_set> modal_names_map;
 
 struct SolverConstraints {
     bool oneSat = false;
+    bool constructModel = false;
 };
 
 #endif

@@ -38,7 +38,7 @@ def run_solver_behavior(cnf_path):
 def get_behavioral_test_cases():
     test_cases = []
     for dirpath, _, filenames in os.walk(PROBLEMS_ROOT):
-        for fname in sorted(filenames):
+        for fname in filenames:
             if fname.endswith(".cnf.txt"):
                 file_path = os.path.join(dirpath, fname)
                 rel_path = os.path.relpath(file_path, PROBLEMS_ROOT)

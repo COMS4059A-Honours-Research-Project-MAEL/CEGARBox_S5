@@ -4,29 +4,28 @@ GlobalSolutionMemo::GlobalSolutionMemo() {}
 GlobalSolutionMemo::~GlobalSolutionMemo() {}
 
 GlobalSolutionMemoResult
-GlobalSolutionMemo::getFromMemo(const shared_ptr<Bitset> &assumptions,
-                                vector<int> modality) {
+GlobalSolutionMemo::getFromMemo(const shared_ptr<Bitset> &assumptions, vector<int> modality) {
   while (true) {
-    for (shared_ptr<Bitset> satisfiable : satSols[vector<int>(modality)]) {
-      if (satisfiable->contains(*assumptions)) {
-        return {true, {true, literal_set()}};
+    for (auto &entry : satSols[vector<int>(modality)]) {
+      if (*entry.activatedLiterals == *assumptions) {
+        return {true, {true, literal_set()}, entry.witness};
       }
     }
-    if (modality.size() == 0)
-      break;
+    if (modality.size() == 0) break;
     modality.pop_back();
   }
-  return {false, {false, literal_set()}};
+  return {false, {false, literal_set()}, literal_set()};
 }
 
 void GlobalSolutionMemo::insertSat(const shared_ptr<Bitset> &assumptions,
+                                  const literal_set &witness,
                                    vector<int> modality) {
   for (int i = satSols[modality].size() - 1; i >= 0; i--) {
-    if (assumptions->contains(*satSols[modality][i])) {
+    if (*satSols[modality][i].activatedLiterals == *assumptions) {
       satSols[modality].erase(satSols[modality].begin() + i);
     }
   }
-  satSols[modality].push_back(assumptions);
+  satSols[modality].push_back({assumptions, witness});
 }
 
 void GlobalSolutionMemo::insertUnsat(const shared_ptr<Bitset> &assumptions,

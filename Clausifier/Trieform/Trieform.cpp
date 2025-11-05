@@ -10,6 +10,7 @@ set<shared_ptr<Trieform>> Trieform::visited;
 vector<shared_ptr<Trieform>> Trieform::topSort;
 
 bool Trieform::useOneSat = false;
+bool Trieform::constructModel = false;
 shared_ptr<Prover> Trieform::globalProver = shared_ptr<Prover>(new MinisatProver(false));
 
 Trieform::Trieform() {

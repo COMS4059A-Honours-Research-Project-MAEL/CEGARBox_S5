@@ -5,6 +5,8 @@ shared_ptr<Cache> TrieformProverS5::persistentCache = make_shared<PrefixCache>("
 unsigned int TrieformProverS5::assumptionsSize = 0;
 GlobalSolutionMemo TrieformProverS5::globalMemo = GlobalSolutionMemo();
 unordered_map<string, unsigned int> TrieformProverS5::idMap = unordered_map<string, unsigned int>();
+KripkeModelS5 TrieformProverS5::model = KripkeModelS5();
+shared_ptr<Node> TrieformProverS5::root = make_shared<Node>();
 
 shared_ptr<Trieform>
 TrieformFactory::makeTrieS5(const shared_ptr<Formula> &formula,
@@ -59,11 +61,11 @@ TrieformProverS5::convertAssumptionsToBitset(literal_set literals) {
 
 void TrieformProverS5::updateSolutionMemo(const shared_ptr<Bitset> &assumptions,
                                           Solution solution) {
-  if (solution.satisfiable) {
-    globalMemo.insertSat(assumptions, modality);
-  } else {
-    globalMemo.insertUnsat(assumptions, solution.conflict, modality);
-  }
+  // if (solution.satisfiable) {
+  //   globalMemo.insertSat(assumptions, modality);
+  // } else {
+  //   globalMemo.insertUnsat(assumptions, solution.conflict, modality);
+  // }
 }
 
 
@@ -97,44 +99,50 @@ void TrieformProverS5::prepareSAT(name_set extra) {
 
 
 Solution TrieformProverS5::prove(literal_set assumptions = literal_set()) {
+  if (this->constructModel){
+    root->parent = nullptr;
+    return prove(root, vector<shared_ptr<Bitset>>(), assumptions);
+  }
+
   return prove(vector<shared_ptr<Bitset>>(), assumptions);
 }
 
 
-inline bool isAuxiliaryLiteral(const string& name) {
-    return name.empty() || name[0] == 'P' || name[0] == 'x' || name[0] == '$';
+void TrieformProverS5::printModel() {
+  model.build(root);
+  model.print();
 }
 
 
 Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set assumptions) {
+Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set assumptions) {
   // Check solution memo
   shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
   GlobalSolutionMemoResult memoResult = globalMemo.getFromMemo(assumptionsBitset, modality);
-  
+  literal_set currentModel;
+
   if (memoResult.inSatMemo) {
     return memoResult.result;
   }
+
   // If the assumptions are in a higher valuation, connect back so it is
   // satisfiable
   if (isInHistory(history, assumptionsBitset)) {
     return {true, literal_set()};
   }
+
   // Solve locally
+  restart:
   Solution solution = prover->solve(assumptions);
+  currentModel = prover -> getModel();
 
   if (!solution.satisfiable) {
-    updateSolutionMemo(assumptionsBitset, solution);
+    globalMemo.insertUnsat(assumptionsBitset, solution.conflict, modality);
     return solution;
   }
 
   prover->calculateTriggeredDiamondsClauses();
   modal_literal_map triggeredDiamonds = prover->getTriggeredDiamondClauses();
-
-  // If there are no fired diamonds, it is satisfiable
-  if (triggeredDiamonds.size() == 0) {
-    updateSolutionMemo(assumptionsBitset, solution);
-    return solution;
-  }
 
   prover->calculateTriggeredBoxClauses();
   modal_literal_map triggeredBoxes = prover->getTriggeredBoxClauses();
@@ -165,6 +173,7 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
       // Run the solver on current level
       history.push_back(assumptionsBitset);
       Solution childSolution = prove(history, childAssumptions);
+      Solution childSolution = prove(history, childAssumptions);
       history.pop_back();
 
       if (childSolution.satisfiable) {
@@ -194,13 +203,135 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
       }
 
       // Find new result
-      return prove(history, assumptions);
+      goto restart;
     }
   }
 
+  globalMemo.insertSat(assumptionsBitset, currentModel, modality);
+  return solution;
+}
 
-  // If we reached here the solution is satisfiable under all modalities  
-  updateSolutionMemo(assumptionsBitset, solution);
+
+Solution TrieformProverS5::prove(shared_ptr<Node> node, vector<shared_ptr<Bitset>> history, literal_set assumptions) {
+  // Check solution memo
+  shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
+  GlobalSolutionMemoResult memoResult = globalMemo.getFromMemo(assumptionsBitset, modality);
+  literal_set currentModel;
+
+  if (memoResult.inSatMemo) {
+      // --- Restore cached model into the node ---
+      node->valuation = memoResult.witness;
+      // --- Validate cached model against current solver ---
+      bool valid = true;
+      for (const Literal &lit : node->valuation) {
+          // modelSatisfiesAssump checks literal truth under current solver's assignment
+          if (!prover->modelSatisfiesAssump(lit)) {
+              valid = false;
+              break;
+          }
+      }
+
+      if (valid) {
+          // Model still valid under current clauses
+          return memoResult.result;
+      } else {
+          // Cached model is stale, recompute this node
+          node->valuation.clear();
+          // (fall through to normal solving)
+      }
+  }
+
+  // If the assumptions are in a higher valuation, connect back so it is
+  // satisfiable
+  if (isInHistory(history, assumptionsBitset)) {
+    // node->valuation = memoResult.witness; 
+    return {true, literal_set()};
+  }
+
+  // Solve locally
+  restart:
+  Solution solution = prover->solve(assumptions);
+
+  if (!solution.satisfiable) {
+    globalMemo.insertUnsat(assumptionsBitset, solution.conflict, modality);
+    return solution;
+  }
+
+  node -> valuation = currentModel = prover->getModel();
+  node -> children.clear();
+
+  prover->calculateTriggeredDiamondsClauses();
+  modal_literal_map triggeredDiamonds = prover->getTriggeredDiamondClauses();
+
+  prover->calculateTriggeredBoxClauses();
+  modal_literal_map triggeredBoxes = prover->getTriggeredBoxClauses();
+
+  for (const auto& modalityDiamonds : triggeredDiamonds) {
+    // Handle each modality
+    if (modalityDiamonds.second.size() == 0) {
+      // If there are no triggered diamonds of a certain modality we can skip it
+      continue;
+    }
+    // Note in the cases diamonds are a subset of boxes then we don't need to
+    // create any worlds (reflexivity satisfies this)
+    diamond_queue diamondPriority = prover->getPrioritisedTriggeredDiamonds(modalityDiamonds.first);
+    while (!diamondPriority.empty()) {
+      // Create a world for each diamond if necessary
+      Literal diamond = diamondPriority.top().literal;
+      diamondPriority.pop();
+
+      // If the diamond is already satisfied by reflexivity no need to create
+      // a successor.
+      if (prover->modelSatisfiesAssump(diamond)) {
+        continue;
+      }
+
+      literal_set childAssumptions = literal_set(triggeredBoxes[modalityDiamonds.first]);
+      childAssumptions.insert(diamond);
+
+      shared_ptr<Node> child = make_shared<Node>();
+
+      // Run the solver on current level
+      history.push_back(assumptionsBitset);
+      Solution childSolution = prove(child, history, childAssumptions);
+      history.pop_back();
+
+      if (childSolution.satisfiable) {
+        if (child -> valuation.size() != 0) {
+          child -> parent = node;
+          node -> children.push_back(child);
+        }
+        continue;
+      }
+
+      // Otherwise there must have been a conflict
+      vector<literal_set> badImplications = prover->getNotProblemBoxClauses(modalityDiamonds.first, childSolution.conflict);
+
+      if (childSolution.conflict.find(diamond) != childSolution.conflict.end()) {
+        // The diamond clause, either on its own or together with box clauses,
+        // caused a conflict. We must add diamond implies OR NOT problem box
+        // clauses.
+        prover->updateLastFail(diamond);
+        badImplications.push_back(prover->getNotDiamondLeft(modalityDiamonds.first, diamond));
+      } else {
+        // Should be able to remove this (boxes must be able to satisfied
+        // because of reflexivity)
+        // Only the box clauses caused a conflict, so
+        // we must add each diamond clause implies OR NOT problem box lefts
+        badImplications.push_back(prover->getNotAllDiamondLeft(modalityDiamonds.first));
+      }
+
+      // Add ~leftDiamond=>\/~leftProbemBox
+      for (literal_set learnClause : generateClauses(badImplications)) {
+          prover->addClause(learnClause);
+      }
+
+      // Find new result
+      goto restart;
+    }
+  }
+
+  globalMemo.insertSat(assumptionsBitset, currentModel, modality);
   return solution;
 }
 
@@ -213,6 +344,7 @@ void TrieformProverS5::preprocess() {
   
   makePersistence();
 
+  // 
   propagateSymmetricBoxes();
 }
 
@@ -293,10 +425,16 @@ void TrieformProverS5::makePersistence() {
 
 
 void TrieformProverS5::propagateSymmetricBoxes() {
+  for (auto modalitySubtrie : subtrieMap) {
+    dynamic_cast<TrieformProverS5 *>(modalitySubtrie.second.get())
+        ->propagateSymmetricBoxes();
+  }
   for (auto const& [modality, child_trie] : subtrieMap) {
       for (const ModalClause &boxClause : child_trie->getClauses().getBoxClauses()) {
-          // A clause a -> []b in the cluster (child) implies ~b -> []~a in the parent.
-          clauses.addBoxClause(boxClause.modality, boxClause.right->negate(), boxClause.left->negate());
+          // A clause a -> []b in child implies ~b -> []~a in the parent.
+          if (modality == boxClause.modality) {
+            clauses.addBoxClause(boxClause.modality, boxClause.right->negate(), boxClause.left->negate());
+          }
       }
   }
 }

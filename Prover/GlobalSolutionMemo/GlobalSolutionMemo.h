@@ -14,6 +14,7 @@ using namespace std;
 struct GlobalSolutionMemoResult {
   bool inSatMemo;
   Solution result;
+  literal_set witness;
 };
 
 struct IntVectorHash {
@@ -40,8 +41,12 @@ private:
     literal_set unsatCore;
   };
 
-  unordered_map<vector<int>, vector<shared_ptr<Bitset>>, IntVectorHash,
-                IntVectorEqual>
+  struct SatHolder {
+    shared_ptr<Bitset> activatedLiterals;
+    literal_set witness;
+  };
+
+  unordered_map<vector<int>, vector<SatHolder>, IntVectorHash, IntVectorEqual>
       satSols;
   unordered_map<vector<int>, vector<UnsatHolder>, IntVectorHash, IntVectorEqual>
       unsatSols;
@@ -53,9 +58,10 @@ public:
   GlobalSolutionMemoResult getFromMemo(const shared_ptr<Bitset> &assumptions,
                                        vector<int> modality);
 
-  void insertSat(const shared_ptr<Bitset> &assumptions, vector<int> modality);
-  void insertUnsat(const shared_ptr<Bitset> &assumptions,
-                   const literal_set &unsatCore, vector<int> modality);
+  void insertSat(const shared_ptr<Bitset> &assumptions, 
+    const literal_set &witness, vector<int> modality);
+  void insertUnsat(const shared_ptr<Bitset> &assumptions, 
+    const literal_set &unsatCore, vector<int> modality);
 };
 
 #endif

@@ -1,6 +1,7 @@
 import subprocess
 import os
 import json
+from tqdm import tqdm
 
 # --- Paths Configuration ---
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,31 +34,27 @@ def run_solver(cnf_path):
 
 def main():
     """Generates expected results for all problem subdirectories."""
-    # The argparse part is no longer needed as we'll iterate through all subdirectories
     expected_results = {}
 
-    for dirpath, _, filenames in os.walk(PROBLEMS_ROOT):
-        # We only care about subdirectories containing problems
-        if dirpath == PROBLEMS_ROOT:
-            continue
-        
+    # Iterate over subdirectories containing problems
+    problem_subdirs = [
+        dirpath for dirpath, _, _ in os.walk(PROBLEMS_ROOT) if dirpath != PROBLEMS_ROOT
+    ]
+
+    for dirpath in tqdm(problem_subdirs, desc="Problem sets"):
         subdir = os.path.relpath(dirpath, PROBLEMS_ROOT)
-        print(f"Processing problems in '{subdir}'...")
-        
-        for fname in sorted(filenames):
-            if fname.endswith(".cnf.txt"):
-                cnf_path = os.path.join(dirpath, fname)
-                sat_result = run_solver(cnf_path)
-                
-                # Use a relative path as the key
-                relative_path_key = os.path.join(subdir, fname)
-                expected_results[relative_path_key] = sat_result
-                
-                print(f"  {relative_path_key}: {'SATISFIABLE' if sat_result else 'UNSATISFIABLE'}")
-        print()
+
+        cnf_files = sorted([f for f in os.listdir(dirpath) if f.endswith(".cnf.txt")])
+        for fname in tqdm(cnf_files, desc=f"Problems in {subdir}", leave=False):
+            cnf_path = os.path.join(dirpath, fname)
+            sat_result = run_solver(cnf_path)
+
+            relative_path_key = os.path.join(subdir, fname)
+            expected_results[relative_path_key] = sat_result
 
     with open(OUTPUT_FILE, "w") as f:
         json.dump(expected_results, f, indent=2)
+
     print(f"\nExpected results saved to {OUTPUT_FILE}")
 
 
