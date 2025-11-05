@@ -16,6 +16,10 @@ shared_ptr<Trieform> TrieformFactory::makeTrie(const shared_ptr<Formula> &formul
     if (constraints.oneSat) {
         Trieform::useOneSat = true;
     }
+
+    if (constraints.constructModel){
+        Trieform::constructModel = true;
+    }
     
     return makeTrieS5(newFormula);
 }

@@ -6,6 +6,7 @@ unsigned int TrieformProverS5::assumptionsSize = 0;
 GlobalSolutionMemo TrieformProverS5::globalMemo = GlobalSolutionMemo();
 unordered_map<string, unsigned int> TrieformProverS5::idMap = unordered_map<string, unsigned int>();
 KripkeModelS5 TrieformProverS5::model = KripkeModelS5();
+shared_ptr<Node> TrieformProverS5::root = make_shared<Node>();
 
 shared_ptr<Trieform>
 TrieformFactory::makeTrieS5(const shared_ptr<Formula> &formula,
@@ -60,11 +61,11 @@ TrieformProverS5::convertAssumptionsToBitset(literal_set literals) {
 
 void TrieformProverS5::updateSolutionMemo(const shared_ptr<Bitset> &assumptions,
                                           Solution solution) {
-  if (solution.satisfiable) {
-    globalMemo.insertSat(assumptions, modality);
-  } else {
-    globalMemo.insertUnsat(assumptions, solution.conflict, modality);
-  }
+  // if (solution.satisfiable) {
+  //   globalMemo.insertSat(assumptions, modality);
+  // } else {
+  //   globalMemo.insertUnsat(assumptions, solution.conflict, modality);
+  // }
 }
 
 
@@ -98,56 +99,49 @@ void TrieformProverS5::prepareSAT(name_set extra) {
 
 
 Solution TrieformProverS5::prove(literal_set assumptions = literal_set()) {
+  if (this->constructModel){
+    root->parent = nullptr;
+    return prove(root, vector<shared_ptr<Bitset>>(), assumptions);
+  }
 
-  shared_ptr<TraceNode> root = make_shared<TraceNode>();
-  root->parent = nullptr;
-  
-  Solution solution = prove(root, vector<shared_ptr<Bitset>>(), assumptions);
-
-  if (!solution.satisfiable) return solution;
-
-  buildKripkeFromTrace(root);
-
-  return solution;
+  return prove(vector<shared_ptr<Bitset>>(), assumptions);
 }
 
 
-inline bool isAuxiliaryLiteral(const string& name) {
-    return name.empty() || name[0] == 'P' || name[0] == 'x' || name[0] == '$';
+void TrieformProverS5::printModel() {
+  model.build(root);
+  model.print();
 }
 
 
-Solution TrieformProverS5::prove(const shared_ptr<TraceNode>& node, vector<shared_ptr<Bitset>> history, literal_set assumptions) {
+Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set assumptions) {
   // Check solution memo
   shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
   GlobalSolutionMemoResult memoResult = globalMemo.getFromMemo(assumptionsBitset, modality);
-  
+  literal_set currentModel;
+
   if (memoResult.inSatMemo) {
     return memoResult.result;
   }
+
   // If the assumptions are in a higher valuation, connect back so it is
   // satisfiable
   if (isInHistory(history, assumptionsBitset)) {
     return {true, literal_set()};
   }
+
   // Solve locally
+  restart:
   Solution solution = prover->solve(assumptions);
+  currentModel = prover -> getModel();
 
   if (!solution.satisfiable) {
-    updateSolutionMemo(assumptionsBitset, solution);
+    globalMemo.insertUnsat(assumptionsBitset, solution.conflict, modality);
     return solution;
   }
-
-  node->valuation = prover->getModel();
 
   prover->calculateTriggeredDiamondsClauses();
   modal_literal_map triggeredDiamonds = prover->getTriggeredDiamondClauses();
-
-  // If there are no fired diamonds, it is satisfiable
-  if (triggeredDiamonds.size() == 0) {
-    updateSolutionMemo(assumptionsBitset, solution);
-    return solution;
-  }
 
   prover->calculateTriggeredBoxClauses();
   modal_literal_map triggeredBoxes = prover->getTriggeredBoxClauses();
@@ -175,24 +169,14 @@ Solution TrieformProverS5::prove(const shared_ptr<TraceNode>& node, vector<share
       literal_set childAssumptions = literal_set(triggeredBoxes[modalityDiamonds.first]);
       childAssumptions.insert(diamond);
 
-      shared_ptr<TraceNode> child = make_shared<TraceNode>();
-      child->parent = node;
-      node->children.push_back(child);
-      node->causeDiamonds.push_back(diamond);
-
-
       // Run the solver on current level
       history.push_back(assumptionsBitset);
-      Solution childSolution = prove(child, history, childAssumptions);
+      Solution childSolution = prove(history, childAssumptions);
       history.pop_back();
 
       if (childSolution.satisfiable) {
         continue;
       }
-
-      // Remove all worlds created from the current world
-      node->children.pop_back();
-      node->causeDiamonds.pop_back();
 
       // Otherwise there must have been a conflict
       vector<literal_set> badImplications = prover->getNotProblemBoxClauses(modalityDiamonds.first, childSolution.conflict);
@@ -217,100 +201,136 @@ Solution TrieformProverS5::prove(const shared_ptr<TraceNode>& node, vector<share
       }
 
       // Find new result
-      // goto restart;
-      return prove(node, history, assumptions);
+      goto restart;
     }
   }
 
-
-  // If we reached here the solution is satisfiable under all modalities  
-  updateSolutionMemo(assumptionsBitset, solution);
+  globalMemo.insertSat(assumptionsBitset, currentModel, modality);
   return solution;
 }
 
-void TrieformProverS5::buildKripkeFromTrace(const std::shared_ptr<TraceNode>& root) {
-    if (!root) {
-        return;
+
+Solution TrieformProverS5::prove(shared_ptr<Node> node, vector<shared_ptr<Bitset>> history, literal_set assumptions) {
+  // Check solution memo
+  shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
+  GlobalSolutionMemoResult memoResult = globalMemo.getFromMemo(assumptionsBitset, modality);
+  literal_set currentModel;
+
+  if (memoResult.inSatMemo) {
+      // --- Restore cached model into the node ---
+      node->valuation = memoResult.witness;
+      // --- Validate cached model against current solver ---
+      bool valid = true;
+      for (const Literal &lit : node->valuation) {
+          // modelSatisfiesAssump checks literal truth under current solver's assignment
+          if (!prover->modelSatisfiesAssump(lit)) {
+              valid = false;
+              break;
+          }
+      }
+
+      if (valid) {
+          // Model still valid under current clauses
+          return memoResult.result;
+      } else {
+          // Cached model is stale, recompute this node
+          node->valuation.clear();
+          // (fall through to normal solving)
+      }
+  }
+
+  // If the assumptions are in a higher valuation, connect back so it is
+  // satisfiable
+  if (isInHistory(history, assumptionsBitset)) {
+    // node->valuation = memoResult.witness; 
+    return {true, literal_set()};
+  }
+
+  // Solve locally
+  restart:
+  Solution solution = prover->solve(assumptions);
+
+  if (!solution.satisfiable) {
+    globalMemo.insertUnsat(assumptionsBitset, solution.conflict, modality);
+    return solution;
+  }
+
+  node -> valuation = currentModel = prover->getModel();
+  node -> children.clear();
+
+  prover->calculateTriggeredDiamondsClauses();
+  modal_literal_map triggeredDiamonds = prover->getTriggeredDiamondClauses();
+
+  prover->calculateTriggeredBoxClauses();
+  modal_literal_map triggeredBoxes = prover->getTriggeredBoxClauses();
+
+  for (const auto& modalityDiamonds : triggeredDiamonds) {
+    // Handle each modality
+    if (modalityDiamonds.second.size() == 0) {
+      // If there are no triggered diamonds of a certain modality we can skip it
+      continue;
     }
-    
-    // 1. Reset the model and caches for a fresh build.
-    nodeToWorldIdCache.clear();
+    // Note in the cases diamonds are a subset of boxes then we don't need to
+    // create any worlds (reflexivity satisfies this)
+    diamond_queue diamondPriority = prover->getPrioritisedTriggeredDiamonds(modalityDiamonds.first);
+    while (!diamondPriority.empty()) {
+      // Create a world for each diamond if necessary
+      Literal diamond = diamondPriority.top().literal;
+      diamondPriority.pop();
 
-    // Tracks unique valuations via their signatures to avoid creating duplicate worlds.
-    std::unordered_map<std::string, unsigned int> signatureToWorldId;
+      // If the diamond is already satisfied by reflexivity no need to create
+      // a successor.
+      if (prover->modelSatisfiesAssump(diamond)) {
+        continue;
+      }
 
-    // 2. Start the recursive build process.
-    buildModelRecursive(root, signatureToWorldId);
+      literal_set childAssumptions = literal_set(triggeredBoxes[modalityDiamonds.first]);
+      childAssumptions.insert(diamond);
 
-    // 3. Finalize the model by making accessibility an equivalence relation (S5).
-    model.finalizeToS5();
-}
+      shared_ptr<Node> child = make_shared<Node>();
 
-// --- Private Helper Methods ---
+      // Run the solver on current level
+      history.push_back(assumptionsBitset);
+      Solution childSolution = prove(child, history, childAssumptions);
+      history.pop_back();
 
-std::string TrieformProverS5::getValuationSignature(const literal_set& valuation) const {
-    std::vector<std::string> names;
-    names.reserve(valuation.size()); // Pre-allocate memory to avoid reallocations.
-
-    for (const auto& lit : valuation) {
-        if (isAuxiliaryLiteral(lit.getName())) {
-            continue; // Skip internal/auxiliary literals.
+      if (childSolution.satisfiable) {
+        if (child -> valuation.size() != 0) {
+          child -> parent = node;
+          node -> children.push_back(child);
         }
-        // Prepend "-" for negative literals to ensure uniqueness.
-        names.push_back((lit.getPolarity() ? "" : "-") + lit.getName());
+        continue;
+      }
+
+      // Otherwise there must have been a conflict
+      vector<literal_set> badImplications = prover->getNotProblemBoxClauses(modalityDiamonds.first, childSolution.conflict);
+
+      if (childSolution.conflict.find(diamond) != childSolution.conflict.end()) {
+        // The diamond clause, either on its own or together with box clauses,
+        // caused a conflict. We must add diamond implies OR NOT problem box
+        // clauses.
+        prover->updateLastFail(diamond);
+        badImplications.push_back(prover->getNotDiamondLeft(modalityDiamonds.first, diamond));
+      } else {
+        // Should be able to remove this (boxes must be able to satisfied
+        // because of reflexivity)
+        // Only the box clauses caused a conflict, so
+        // we must add each diamond clause implies OR NOT problem box lefts
+        badImplications.push_back(prover->getNotAllDiamondLeft(modalityDiamonds.first));
+      }
+
+      // Add ~leftDiamond=>\/~leftProbemBox
+      for (literal_set learnClause : generateClauses(badImplications)) {
+          prover->addClause(learnClause);
+      }
+
+      // Find new result
+      goto restart;
     }
+  }
 
-    // Sorting ensures that valuations with the same literals in a different
-    // order (e.g., {p, q} and {q, p}) produce the same signature.
-    std::sort(names.begin(), names.end());
-
-    // Use a stringstream for more efficient string concatenation.
-    std::stringstream signatureStream;
-    for (size_t i = 0; i < names.size(); ++i) {
-        signatureStream << names[i] << (i < names.size() - 1 ? "|" : "");
-    }
-    return signatureStream.str();
-}
-
-unsigned int TrieformProverS5::buildModelRecursive(
-    const std::shared_ptr<TraceNode>& currentNode,
-    std::unordered_map<std::string, unsigned int>& signatureToWorldId
-) {
-    // Use the cache to avoid re-processing an already-visited node.
-    if (auto it = nodeToWorldIdCache.find(currentNode); it != nodeToWorldIdCache.end()) {
-        return it->second;
-    }
-
-    // === Step A: Get or create the world for the current node ===
-    const std::string signature = getValuationSignature(currentNode->valuation);
-    
-    unsigned int sourceWorldId;
-
-    // Use try_emplace (C++17) to efficiently find a key or insert it if absent.
-    // This avoids doing a separate find() and then insert().
-    auto [iterator, inserted] = signatureToWorldId.try_emplace(signature, 0);
-
-    if (inserted) {
-        // First time seeing this valuation: create a new world.
-        int newWorldId = model.createWorld(currentNode->valuation);
-        sourceWorldId = static_cast<unsigned int>(newWorldId);
-        iterator->second = sourceWorldId; // Store the new ID in the map.
-    } else {
-        // A world for this valuation already exists; reuse its ID.
-        sourceWorldId = iterator->second;
-    }
-    
-    // Cache the resulting world ID for this specific trace node.
-    nodeToWorldIdCache[currentNode] = sourceWorldId;
-
-    // === Step B: Recurse on children and add accessibility edges ===
-    for (const auto& childNode : currentNode->children) {
-        // The recursive call ensures the child's world is created and returns its ID.
-        unsigned int targetWorldId = buildModelRecursive(childNode, signatureToWorldId);
-        model.addEdge(sourceWorldId, targetWorldId);
-    }
-    
-    return sourceWorldId;
+  globalMemo.insertSat(assumptionsBitset, currentModel, modality);
+  return solution;
 }
 
 
@@ -322,6 +342,7 @@ void TrieformProverS5::preprocess() {
   
   makePersistence();
 
+  // 
   propagateSymmetricBoxes();
 }
 
@@ -402,15 +423,16 @@ void TrieformProverS5::makePersistence() {
 
 
 void TrieformProverS5::propagateSymmetricBoxes() {
+  for (auto modalitySubtrie : subtrieMap) {
+    dynamic_cast<TrieformProverS5 *>(modalitySubtrie.second.get())
+        ->propagateSymmetricBoxes();
+  }
   for (auto const& [modality, child_trie] : subtrieMap) {
       for (const ModalClause &boxClause : child_trie->getClauses().getBoxClauses()) {
-          // A clause a -> []b in the cluster (child) implies ~b -> []~a in the parent.
-          clauses.addBoxClause(boxClause.modality, boxClause.right->negate(), boxClause.left->negate());
+          // A clause a -> []b in child implies ~b -> []~a in the parent.
+          if (modality == boxClause.modality) {
+            clauses.addBoxClause(boxClause.modality, boxClause.right->negate(), boxClause.left->negate());
+          }
       }
   }
-}
-
-
-void TrieformProverS5::printKripkeModel(){
-  model.print();
 }

@@ -9,7 +9,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIGS_DIR = os.path.join(PROJECT_ROOT, "Tests", "Configs")
 PROBLEMS_DIR = os.path.join(PROJECT_ROOT, "Tests", "Problems")
 
-seed(42)
+# seed(42)
 
 def generate_modal_cnf_problems(outdir: str, file_path: str):
 
@@ -37,7 +37,7 @@ def main():
     config_files = []
     for dirpath, _, filenames in os.walk(CONFIGS_DIR):
         for fname in sorted(filenames):
-            if fname.endswith(".json"):
+            if fname.endswith(".json") and not (fname in ("Problem_Set_1.json", "Problem_Set_2.json")):
                 config_files.append(os.path.join(dirpath, fname))
 
     for file_path in tqdm(config_files, desc="Configs"):

@@ -62,10 +62,13 @@ struct Solution {
 };
 
 struct LiteralSetHash {
-    size_t operator()(const literal_set& assumptions) const {
-        int hash = 0;
-        for (auto x : assumptions) hash += x.hash();
-        return hash;
+    size_t operator()(const literal_set &assumptions) const noexcept {
+        size_t h = 0;
+        for (auto &x : assumptions) {
+            size_t lh = x.hash();
+            h ^= lh + 0x9e3779b9 + (h << 6) + (h >> 2);
+        }
+        return h;
     }
 };
 

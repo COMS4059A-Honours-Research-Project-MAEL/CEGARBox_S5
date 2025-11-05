@@ -36,6 +36,7 @@ static struct argp_option options[] = {
     {"valid", 'a', 0, 0, "Prove validity."},
     {"onesat", '1', 0, 0, "Use 1 SAT Solver."},
     {"verbose", 'v', 0, 0, "Verbosity."},
+    {"model", 'm', 0, 0, "Construct a model."},
     {0, 0, 0, 0, 0, 0}
 };
 
@@ -44,6 +45,7 @@ struct arguments_struct {
     SolverConstraints settings;
     bool valid = false;
     bool verbose = false;
+    bool model = false;
 };
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
@@ -61,6 +63,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case '1':
             arguments->settings.oneSat = true;
             break;
+        case 'm':
+            arguments->settings.constructModel = true;
+            arguments->model = true;
         case ARGP_KEY_ARG:
             return 0;
         default:
@@ -236,13 +241,17 @@ void solve(arguments_struct &args) {
     }
    
     bool satisfiable = trie->isSatisfiable(Trieform::stringModalContexts);
+    auto solve = chrono::steady_clock::now();
 
     if (args.valid) {
         cout << (satisfiable ? "Invalid" : "Valid") << endl;
     } else {
         if (satisfiable) {
             cout << "s SATISFIABLE" << endl;
-            dynamic_cast<TrieformProverS5* >(trie.get())->printKripkeModel();
+
+            if (args.model) {
+                dynamic_cast<TrieformProverS5* >(trie.get())->printModel();
+            }
         }
         else {
             cout << "s UNSATISFIABLE" << endl;
@@ -292,7 +301,6 @@ void solve(arguments_struct &args) {
 #endif
 
     if (args.verbose) {
-        auto solve = chrono::steady_clock::now();
         cout << "Solved" << endl;
 
         auto readTime = read - start;

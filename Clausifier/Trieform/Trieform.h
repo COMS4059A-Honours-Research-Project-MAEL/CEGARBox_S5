@@ -97,6 +97,7 @@ class Trieform : public enable_shared_from_this<Trieform> {
     vector<shared_ptr<Trieform>> parents;
 
     static bool useOneSat;
+    static bool constructModel;
     static shared_ptr<Cache> cache;
     static set<pair<vector<int>, vector<int>>> composeCache;
     static set<shared_ptr<Trieform>> visited;

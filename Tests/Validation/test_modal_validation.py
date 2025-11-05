@@ -24,7 +24,7 @@ def run_solver_and_get_model(cnf_path):
     """Runs the solver and returns the model string if satisfiable."""
     try:
         result = subprocess.run(
-            [SOLVER_BIN, "-f", cnf_path],
+            [SOLVER_BIN, "-f", cnf_path, "-m"],
             capture_output=True,
             text=True,
             check=True
@@ -56,14 +56,18 @@ def test_model_validation(rel_path):
     Tests if the model produced by the solver is correct for satisfiable problems.
     """
     cnf_path = os.path.join(PROBLEMS_ROOT, rel_path)
-    
+
+    # Display the file currently being tested
+    print(f"\033[94mTesting file:\033[0m '{cnf_path}'")
+    sys.stdout.flush()  # Ensure output shows immediately even if pytest buffers
+
     # Run the solver to get the model
     model_str = run_solver_and_get_model(cnf_path)
     
     if model_str is None:
-        pytest.fail(f"Solver did not produce a model for satisfiable problem {rel_path}.")
+        pytest.fail(f"Solver did not produce a model for satisfiable problem '{cnf_path}'")
     
     # Verify the model using the CNF file as the formula file
     is_model_correct = verify_model(model_str, cnf_path)
     
-    assert is_model_correct, f"Solver produced an incorrect model for {rel_path}."
+    assert is_model_correct, f"Solver produced an incorrect model for '{cnf_path}'"
