@@ -115,6 +115,7 @@ void TrieformProverS5::printModel() {
 
 
 Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set assumptions) {
+Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set assumptions) {
   // Check solution memo
   shared_ptr<Bitset> assumptionsBitset = convertAssumptionsToBitset(assumptions);
   GlobalSolutionMemoResult memoResult = globalMemo.getFromMemo(assumptionsBitset, modality);
@@ -171,6 +172,7 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
 
       // Run the solver on current level
       history.push_back(assumptionsBitset);
+      Solution childSolution = prove(history, childAssumptions);
       Solution childSolution = prove(history, childAssumptions);
       history.pop_back();
 
