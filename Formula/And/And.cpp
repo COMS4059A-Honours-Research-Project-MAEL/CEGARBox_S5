@@ -87,6 +87,14 @@ shared_ptr<Formula> And::negatedNormalForm() {
   return shared_from_this();
 }
 
+shared_ptr<Formula> And::S5NormalForm() {
+  formula_set newAndSet(andSet_.size());
+  for (shared_ptr<Formula> formula : andSet_) {
+    newAndSet.insert(formula->S5NormalForm());
+  }
+  andSet_ = newAndSet;
+  return shared_from_this();
+}
 
 shared_ptr<Formula> And::tailNormalForm() {
   formula_set newAndSet(andSet_.size());

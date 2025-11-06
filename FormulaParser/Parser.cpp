@@ -4,15 +4,28 @@
 #include <sstream>
 #include <stdexcept>
 
+
 static std::string readFileContent(const std::string& filename) {
-    std::ifstream formulaFile(filename);
+    std::ifstream formulaFile(filename, std::ios::in | std::ios::binary | std::ios::ate);
     if (!formulaFile) {
         throw std::runtime_error("Could not open file: " + filename);
     }
-    std::stringstream buffer;
-    buffer << formulaFile.rdbuf();
-    return buffer.str();
+
+    // Get the file size and pre-allocate the string buffer
+    std::streamsize size = formulaFile.tellg();
+    formulaFile.seekg(0, std::ios::beg);
+
+    std::string content(size, '\0'); // Pre-allocate the string
+    
+    // Read the file directly into the string's buffer
+    if (formulaFile.read(&content[0], size)) {
+        return content;
+    }
+
+    // Handle error or partial read gracefully if necessary
+    throw std::runtime_error("Error reading file content: " + filename);
 }
+
 
 Parser::Parser(const std::string& filename)  : lexer(readFileContent(filename)) {
     currentToken = lexer.getNextToken();

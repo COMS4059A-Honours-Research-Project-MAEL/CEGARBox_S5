@@ -19,6 +19,7 @@ class Formula {
     virtual FormulaType getType() const = 0;
 
     virtual shared_ptr<Formula> negatedNormalForm() = 0;
+    virtual shared_ptr<Formula> S5NormalForm() = 0;
     virtual shared_ptr<Formula> tailNormalForm() = 0;
     virtual shared_ptr<Formula> negate() = 0;
     virtual shared_ptr<Formula> simplify() = 0;

@@ -10,7 +10,7 @@ shared_ptr<Node> TrieformProverS5::root = make_shared<Node>();
 
 shared_ptr<Trieform>
 TrieformFactory::makeTrieS5(const shared_ptr<Formula> &formula,
-          shared_ptr<Trieform> trieParent) {
+                            shared_ptr<Trieform> trieParent) {
   shared_ptr<Trieform> trie = shared_ptr<Trieform>(new TrieformProverS5());
   trie->initialise(formula, trieParent);
   return trie;
@@ -47,7 +47,6 @@ shared_ptr<Trieform> TrieformProverS5::create(const vector<int> &newModality) {
   return TrieformFactory::makeTrieS5(newModality, shared_from_this());
 }
 
-
 shared_ptr<Bitset>
 TrieformProverS5::convertAssumptionsToBitset(literal_set literals) {
   shared_ptr<Bitset> bitset =
@@ -74,13 +73,13 @@ void TrieformProverS5::prepareSAT(name_set extra) {
   // Shortcut only do this for level 1 as reflexivity guarantees every possible
   // assumption is here. Renaming could stuff this up
   for (string name : extra) {
-    idMap[name] = assumptionsSize++;
+    if (idMap.find(name) == idMap.end()) {
+      idMap[name] = assumptionsSize++;
+    }
   }
-
   for (ModalClause clause : clauses.getDiamondClauses()) {
     extra.insert(prover->getPrimitiveName(clause.right));
   }
-  
   modal_names_map modalExtras = prover->prepareSAT(clauses, extra);
   for (auto modalSubtrie : subtrieMap) {
     modalSubtrie.second->prepareSAT(modalExtras[modalSubtrie.first]);
@@ -113,7 +112,6 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
   if (memoResult.inSatMemo) {
     return memoResult.result;
   }
-
   // If the assumptions are in a higher valuation, connect back so it is
   // satisfiable
   if (isInHistory(history, assumptionsBitset)) {
@@ -123,12 +121,13 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
   // Solve locally
   restart:
   Solution solution = prover->solve(assumptions);
-  currentModel = prover -> getModel();
 
   if (!solution.satisfiable) {
     globalMemo.insertUnsat(assumptionsBitset, solution.conflict, modality);
     return solution;
   }
+
+  currentModel = prover -> getModel();
 
   prover->calculateTriggeredDiamondsClauses();
   modal_literal_map triggeredDiamonds = prover->getTriggeredDiamondClauses();
@@ -136,7 +135,7 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
   prover->calculateTriggeredBoxClauses();
   modal_literal_map triggeredBoxes = prover->getTriggeredBoxClauses();
 
-  for (const auto& modalityDiamonds : triggeredDiamonds) {
+  for (auto modalityDiamonds : triggeredDiamonds) {
     // Handle each modality
     if (modalityDiamonds.second.size() == 0) {
       // If there are no triggered diamonds of a certain modality we can skip it
@@ -144,7 +143,8 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
     }
     // Note in the cases diamonds are a subset of boxes then we don't need to
     // create any worlds (reflexivity satisfies this)
-    diamond_queue diamondPriority = prover->getPrioritisedTriggeredDiamonds(modalityDiamonds.first);
+    diamond_queue diamondPriority =
+        prover->getPrioritisedTriggeredDiamonds(modalityDiamonds.first);
     while (!diamondPriority.empty()) {
       // Create a world for each diamond if necessary
       Literal diamond = diamondPriority.top().literal;
@@ -156,20 +156,24 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
         continue;
       }
 
-      literal_set childAssumptions = literal_set(triggeredBoxes[modalityDiamonds.first]);
+      literal_set childAssumptions =
+          literal_set(triggeredBoxes[modalityDiamonds.first]);
       childAssumptions.insert(diamond);
 
-      // Run the solver on current level
+      // Run the solver for the next level
       history.push_back(assumptionsBitset);
-      Solution childSolution = prove(history, childAssumptions);
+      Solution childSolution;
+      childSolution = prove(history, childAssumptions);
       history.pop_back();
 
+      // If it is satisfiable create the next world
       if (childSolution.satisfiable) {
         continue;
       }
 
       // Otherwise there must have been a conflict
-      vector<literal_set> badImplications = prover->getNotProblemBoxClauses(modalityDiamonds.first, childSolution.conflict);
+      vector<literal_set> badImplications = prover->getNotProblemBoxClauses(
+          modalityDiamonds.first, childSolution.conflict);
 
       if (childSolution.conflict.find(diamond) != childSolution.conflict.end()) {
         // The diamond clause, either on its own or together with box clauses,
@@ -182,19 +186,19 @@ Solution TrieformProverS5::prove(vector<shared_ptr<Bitset>> history, literal_set
         // because of reflexivity)
         // Only the box clauses caused a conflict, so
         // we must add each diamond clause implies OR NOT problem box lefts
-        badImplications.push_back(prover->getNotAllDiamondLeft(modalityDiamonds.first));
+        badImplications.push_back(
+            prover->getNotAllDiamondLeft(modalityDiamonds.first));
       }
-
-      // Add ~leftDiamond=>\/~leftProbemBox
+      
       for (literal_set learnClause : generateClauses(badImplications)) {
-          prover->addClause(learnClause);
+        prover->addClause(learnClause);
       }
 
       // Find new result
       goto restart;
     }
   }
-
+  // If we reached here the solution is satisfiable under all modalities
   globalMemo.insertSat(assumptionsBitset, currentModel, modality);
   return solution;
 }
@@ -232,7 +236,6 @@ Solution TrieformProverS5::prove(shared_ptr<Node> node, vector<shared_ptr<Bitset
   // If the assumptions are in a higher valuation, connect back so it is
   // satisfiable
   if (isInHistory(history, assumptionsBitset)) {
-    // node->valuation = memoResult.witness; 
     return {true, literal_set()};
   }
 
@@ -254,7 +257,7 @@ Solution TrieformProverS5::prove(shared_ptr<Node> node, vector<shared_ptr<Bitset
   prover->calculateTriggeredBoxClauses();
   modal_literal_map triggeredBoxes = prover->getTriggeredBoxClauses();
 
-  for (const auto& modalityDiamonds : triggeredDiamonds) {
+  for (auto modalityDiamonds : triggeredDiamonds) {
     // Handle each modality
     if (modalityDiamonds.second.size() == 0) {
       // If there are no triggered diamonds of a certain modality we can skip it
@@ -279,11 +282,12 @@ Solution TrieformProverS5::prove(shared_ptr<Node> node, vector<shared_ptr<Bitset
 
       shared_ptr<Node> child = make_shared<Node>();
 
-      // Run the solver on current level
+      // Run the solver for the next level
       history.push_back(assumptionsBitset);
       Solution childSolution = prove(child, history, childAssumptions);
       history.pop_back();
 
+      // If it is satisfiable create the next world
       if (childSolution.satisfiable) {
         if (child -> valuation.size() != 0) {
           child -> parent = node;
@@ -293,7 +297,8 @@ Solution TrieformProverS5::prove(shared_ptr<Node> node, vector<shared_ptr<Bitset
       }
 
       // Otherwise there must have been a conflict
-      vector<literal_set> badImplications = prover->getNotProblemBoxClauses(modalityDiamonds.first, childSolution.conflict);
+      vector<literal_set> badImplications = prover->getNotProblemBoxClauses(
+          modalityDiamonds.first, childSolution.conflict);
 
       if (childSolution.conflict.find(diamond) != childSolution.conflict.end()) {
         // The diamond clause, either on its own or together with box clauses,
@@ -306,19 +311,19 @@ Solution TrieformProverS5::prove(shared_ptr<Node> node, vector<shared_ptr<Bitset
         // because of reflexivity)
         // Only the box clauses caused a conflict, so
         // we must add each diamond clause implies OR NOT problem box lefts
-        badImplications.push_back(prover->getNotAllDiamondLeft(modalityDiamonds.first));
+        badImplications.push_back(
+            prover->getNotAllDiamondLeft(modalityDiamonds.first));
       }
-
-      // Add ~leftDiamond=>\/~leftProbemBox
+      
       for (literal_set learnClause : generateClauses(badImplications)) {
-          prover->addClause(learnClause);
+        prover->addClause(learnClause);
       }
 
       // Find new result
       goto restart;
     }
   }
-
+  // If we reached here the solution is satisfiable under all modalities
   globalMemo.insertSat(assumptionsBitset, currentModel, modality);
   return solution;
 }
@@ -332,7 +337,6 @@ void TrieformProverS5::preprocess() {
   
   makePersistence();
 
-  // 
   propagateSymmetricBoxes();
 }
 
@@ -350,6 +354,7 @@ void TrieformProverS5::reflexiveHandleBoxClauses() {
   }
 }
 
+
 void TrieformProverS5::reflexivepropagateLevels() {
   for (auto modalSubtrie : subtrieMap) {
     dynamic_cast<TrieformProverS5 *>(modalSubtrie.second.get())
@@ -357,6 +362,7 @@ void TrieformProverS5::reflexivepropagateLevels() {
     overShadow(modalSubtrie.second, modalSubtrie.first);
   }
 }
+
 
 void TrieformProverS5::pruneTrie() {
   for (auto modalSubtrie : subtrieMap) {
@@ -396,7 +402,7 @@ void TrieformProverS5::makePersistence() {
     rightSet.insert(Not::create(persistent)->negatedNormalForm());
     rightSet.insert(boxClause.right);
     shared_ptr<Formula> rightOr = Or::create(rightSet);
-    
+
     propagateClauses(rightOr);
     if (hasSubtrie(boxClause.modality)) {
       subtrieMap[boxClause.modality]->propagateClauses(rightOr);
@@ -417,12 +423,12 @@ void TrieformProverS5::propagateSymmetricBoxes() {
     dynamic_cast<TrieformProverS5 *>(modalitySubtrie.second.get())
         ->propagateSymmetricBoxes();
   }
-  for (auto const& [modality, child_trie] : subtrieMap) {
-      for (const ModalClause &boxClause : child_trie->getClauses().getBoxClauses()) {
-          // A clause a -> []b in child implies ~b -> []~a in the parent.
-          if (modality == boxClause.modality) {
-            clauses.addBoxClause(boxClause.modality, boxClause.right->negate(), boxClause.left->negate());
-          }
+  for (auto modalitySubtrie : subtrieMap) {
+    for (const ModalClause &boxClause : modalitySubtrie.second->getClauses().getBoxClauses()) {
+      // A clause a -> []b in child implies ~b -> []~a in the parent.
+      if (modalitySubtrie.first == boxClause.modality) {
+        clauses.addBoxClause(boxClause.modality, boxClause.right->negate(), boxClause.left->negate());
       }
+    }
   }
 }

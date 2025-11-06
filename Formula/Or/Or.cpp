@@ -63,6 +63,14 @@ shared_ptr<Formula> Or::negatedNormalForm() {
   return shared_from_this();
 }
 
+shared_ptr<Formula> Or::S5NormalForm() {
+  formula_set newOrSet;
+  for (shared_ptr<Formula> formula : orSet_) {
+    newOrSet.insert(formula->S5NormalForm());
+  }
+  orSet_ = newOrSet;
+  return shared_from_this();
+}
 
 shared_ptr<Formula> Or::tailNormalForm() {
   formula_set newOrSet;
