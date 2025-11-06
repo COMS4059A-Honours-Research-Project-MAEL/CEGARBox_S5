@@ -13,6 +13,7 @@ string Atom::toString() const { return name_; }
 FormulaType Atom::getType() const { return FAtom; }
 
 shared_ptr<Formula> Atom::negatedNormalForm() { return shared_from_this(); }
+shared_ptr<Formula> Atom::S5NormalForm() { return shared_from_this(); }
 shared_ptr<Formula> Atom::tailNormalForm() { return shared_from_this(); }
 
 shared_ptr<Formula> Atom::negate() { return Not::create(shared_from_this()); }

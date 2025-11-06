@@ -58,26 +58,96 @@ shared_ptr<Formula> Box::negate() {
   return Diamond::create(modality_, power_, subformula_->negate());
 }
 
+
 shared_ptr<Formula> Box::simplify() {
+  // 1. Recursively simplify the subformula first (crucial first step)
   subformula_ = subformula_->simplify();
 
-  switch (subformula_->getType()) {
-  case FTrue:
+  // 2. Handle [r]True ≡ True
+  if (subformula_->getType() == FTrue) {
     return True::create();
-  case FBox: {
-    Box *boxFormula = dynamic_cast<Box *>(subformula_.get());
-    if (boxFormula->getModality() == modality_) {
-      power_ += boxFormula->getPower();
-      subformula_ = boxFormula->getSubformula();
-    }
-    return shared_from_this();
   }
 
-  default:
-    return shared_from_this();
+  // --- START S5 REDUCTION LOGIC ---
+
+  // Rule A: [r][r]φ ≡ [r]φ (Box-Box Idempotence)
+  if (subformula_->getType() == FBox) {
+    auto innerB = dynamic_pointer_cast<Box>(subformula_);
+    
+    if (innerB->getModality() == modality_) {
+      power_ += innerB->getPower();
+      subformula_ = innerB->getSubformula();
+    }
   }
+
+  // Rule C [r]^n φ ≡ [r]φ for n > 1
+  if (power_ > 1) {
+    power_ = 1;
+  }
+  
+  // Rule B: [r]<r>φ ≡ <r>φ (Box-Diamond Interaction)
+  if (subformula_->getType() == FDiamond) {
+    auto innerD = dynamic_pointer_cast<Diamond>(subformula_);
+    if (innerD && innerD->getModality() == modality_) {
+      // Return the inner Diamond
+      return innerD; 
+    }
+  }
+
+  // Rule D: [r](A AND B) ≡ [r]A AND [r]B (Box Distribution over Conjunction)
+  // if (subformula_->getType() == FAnd) {
+  //     auto innerAnd = dynamic_pointer_cast<And>(subformula_);
+      
+  //     formula_set newAndSet;
+  //     const formula_set *subformulas = innerAnd->getSubformulasReference();
+      
+  //     for (shared_ptr<Formula> component : *subformulas) {
+  //         // Creates new Box with power=1 (due to prior power reduction)
+  //         shared_ptr<Formula> newBox = Box::create(modality_, power_, component); 
+          
+  //         // Recursively simplify the new box
+  //         newAndSet.insert(newBox->simplify()); 
+  //     }
+      
+  //     // Return the new conjunction, and immediately simplify it to check for
+  //     // top-level And simplifications (e.g., A & True -> A).
+  //     shared_ptr<Formula> newFormula = And::create(newAndSet);
+  //     return newFormula->simplify();
+  // }
+
+  // --- END REDUCTION LOGIC ---
+  
+  return shared_from_this();
 }
 
+
+shared_ptr<Formula> Box::S5NormalForm() {
+  // 1. Recursively call S5NormalForm on the subformula first
+    subformula_ = subformula_->S5NormalForm();
+
+    // 2. Check for the Distribution Rule
+    // Rule D: [r](A & B) ≡ [r]A & [r]B 
+    if (subformula_->getType() == FAnd) {
+        auto innerAnd = dynamic_pointer_cast<And>(subformula_);
+        
+        formula_set newAndSet;
+        const formula_set *subformulas = innerAnd->getSubformulasReference();
+        
+        for (shared_ptr<Formula> component : *subformulas) {
+            // Create a new Box formula for the component: [r]component
+            shared_ptr<Formula> newBox = Box::create(modality_, power_, component);
+            
+            // Re-apply toS5NNF to ensure full distribution of nested parts
+            newAndSet.insert(newBox->S5NormalForm()); 
+        }
+        
+        // Return the new disjunction
+        return And::create(newAndSet);
+    }
+
+    // 3. Return the current Box formula if no distribution occurred
+    return shared_from_this();
+}
 
 
 shared_ptr<Formula> Box::modalFlatten() {

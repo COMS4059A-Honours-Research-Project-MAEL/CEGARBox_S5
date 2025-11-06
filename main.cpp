@@ -135,6 +135,8 @@ void solve(arguments_struct &args) {
     }
 
     formula = formula->simplify();
+    formula = formula->S5NormalForm();
+    formula = formula->simplify();
 
 #if DEBUG_TIME
     auto simplify = chrono::steady_clock::now();

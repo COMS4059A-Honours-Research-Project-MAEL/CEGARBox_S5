@@ -57,24 +57,72 @@ shared_ptr<Formula> Diamond::negate() {
 }
 
 shared_ptr<Formula> Diamond::simplify() {
+  // 1. Recursively simplify the subformula first
   subformula_ = subformula_->simplify();
 
-  switch (subformula_->getType()) {
-  case FFalse:
+  // 2. Handle <r>False ≡ False
+  if (subformula_->getType() == FFalse) {
     return False::create();
-  case FDiamond: {
-    Diamond *diamondFormula = dynamic_cast<Diamond *>(subformula_.get());
-    if (diamondFormula->getModality() == modality_) {
-      power_ += diamondFormula->getPower();
-      subformula_ = diamondFormula->getSubformula();
-    }
-    return shared_from_this();
   }
 
-  default:
-    return shared_from_this();
+  // --- START S5 REDUCTION LOGIC ---
+
+  // // Rule A: <r><r>φ ≡ <r>φ (Diamond-Diamond Idempotence)
+  if (subformula_->getType() == FDiamond) {
+    auto innerD = dynamic_pointer_cast<Diamond>(subformula_);
+
+    if (innerD && innerD->getModality() == modality_) {
+      power_ += innerD->getPower();
+      subformula_ = innerD->getSubformula();
+    }
   }
+
+  // Rule C: <r>^n φ ≡ <r>φ for n > 1
+  if (power_ > 1) {
+    power_ = 1;
+  }
+
+  // Rule B: <r>[r]φ ≡ [r]φ (Diamond-Box Interaction)
+  if (subformula_->getType() == FBox) {
+    auto innerB = dynamic_pointer_cast<Box>(subformula_);
+    if (innerB && innerB->getModality() == modality_) {
+      // Returns the inner Box
+      return innerB; 
+    }
+  }
+
+  return shared_from_this();
 }
+
+
+shared_ptr<Formula> Diamond::S5NormalForm() {
+    // 1. Recursively call S5NormalForm on the subformula first
+    subformula_ = subformula_->S5NormalForm();
+
+    // 2. Check for the Distribution Rule
+    // Rule D: <r>(A OR B) ≡ <r>A OR <r>B 
+    if (subformula_->getType() == FOr) {
+        auto innerOr = dynamic_pointer_cast<Or>(subformula_);
+        
+        formula_set newOrSet;
+        const formula_set *subformulas = innerOr->getSubformulasReference();
+        
+        for (shared_ptr<Formula> component : *subformulas) {
+            // Create a new Diamond formula for the component: <r>component
+            shared_ptr<Formula> newDiamond = Diamond::create(modality_, power_, component);
+            
+            // Re-apply toS5NNF to ensure full distribution of nested parts
+            newOrSet.insert(newDiamond->S5NormalForm()); 
+        }
+        
+        // Return the new disjunction
+        return Or::create(newOrSet);
+    }
+
+    // 3. Return the current Diamond formula if no distribution occurred
+    return shared_from_this();
+}
+
 
 shared_ptr<Formula> Diamond::modalFlatten() {
   subformula_ = subformula_->modalFlatten();

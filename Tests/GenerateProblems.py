@@ -37,7 +37,7 @@ def main():
     config_files = []
     for dirpath, _, filenames in os.walk(CONFIGS_DIR):
         for fname in sorted(filenames):
-            if fname.endswith(".json") and not (fname in ("Problem_Set_1.json", "Problem_Set_2.json")):
+            if fname.endswith(".json"):
                 config_files.append(os.path.join(dirpath, fname))
 
     for file_path in tqdm(config_files, desc="Configs"):

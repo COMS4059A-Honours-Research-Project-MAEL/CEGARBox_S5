@@ -29,11 +29,12 @@ Token Lexer::getNextToken() {
     }
 
     // --- multi-character operators MUST be checked before single-character '<' or '-' ---
-    if (position + 3 <= input.length() && input.compare(position, 3, "<->") == 0) {
+    if (position + 2 < input.length() && input[position] == '<' && input[position+1] == '-' && input[position+2] == '>') {
         position += 3;
         return {TOKEN_IFF, "<->"};
     }
-    if (position + 2 <= input.length() && input.compare(position, 2, "->") == 0) {
+
+    if (position + 1 < input.length() && input[position] == '-' && input[position+1] == '>') {
         position += 2;
         return {TOKEN_IMP, "->"};
     }
@@ -43,7 +44,6 @@ Token Lexer::getNextToken() {
     // Helper lambdas that cast to unsigned char to avoid UB for negative char values
     auto is_alpha = [](char ch){ return std::isalpha(static_cast<unsigned char>(ch)); };
     auto is_alnum = [](char ch){ return std::isalnum(static_cast<unsigned char>(ch)); };
-    auto is_digit = [](char ch){ return std::isdigit(static_cast<unsigned char>(ch)); };
 
     // 1. Handle identifiers (keywords, atoms, modalities)
     if (is_alpha(c)) {
@@ -60,8 +60,9 @@ Token Lexer::getNextToken() {
         if (value == "false") return {TOKEN_FALSE, value};
 
         // modality like r1, r23 (lowercase r followed by digits)
-        if (value.length() > 1 && value[0] == 'r' &&
-            std::all_of(value.begin() + 1, value.end(), [&](char ch){ return is_digit(ch); })) {
+        if (value.length() > 1 && value[0] == 'r' && 
+            std::all_of(value.begin() + 1, value.end(), 
+                [](char ch){ return std::isdigit(static_cast<unsigned char>(ch)); })) {
             return {TOKEN_MODALITY, value};
         }
 

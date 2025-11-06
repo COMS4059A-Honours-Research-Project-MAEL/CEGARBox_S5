@@ -12,6 +12,7 @@ string False::toString() const { return "$false"; }
 FormulaType False::getType() const { return FFalse; }
 
 shared_ptr<Formula> False::negatedNormalForm() { return shared_from_this(); }
+shared_ptr<Formula> False::S5NormalForm() { return shared_from_this(); }
 shared_ptr<Formula> False::tailNormalForm() { return shared_from_this(); }
 
 shared_ptr<Formula> False::negate() { return True::create(); }

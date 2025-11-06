@@ -35,6 +35,7 @@ public:
   FormulaType getType() const;
 
   shared_ptr<Formula> negatedNormalForm();
+  shared_ptr<Formula> S5NormalForm();
   shared_ptr<Formula> tailNormalForm();
   shared_ptr<Formula> negate();
   shared_ptr<Formula> simplify();
