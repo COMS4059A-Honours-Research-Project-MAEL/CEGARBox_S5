@@ -101,84 +101,74 @@ shared_ptr<Formula> Diamond::simplify() {
 
 
 shared_ptr<Formula> Diamond::S5NormalForm() {
-  // 1. Recursively S5-normalise the subformula first
-  subformula_ = subformula_->S5NormalForm();
+  shared_ptr<Formula> innerNF = subformula_->S5NormalForm();
 
-  // --------------------------------------------------
-  // 2. Distribution: <r>(A ∨ B) ≡ <r>A ∨ <r>B
-  // --------------------------------------------------
-  if (subformula_->getType() == FOr) {
-    auto innerOr = dynamic_pointer_cast<Or>(subformula_);
+  // 1. <r>(A ∨ B) ≡ <r>A ∨ <r>B
+  if (innerNF->getType() == FOr) {
+    auto innerOr = dynamic_pointer_cast<Or>(innerNF);
+    const formula_set *subs = innerOr->getSubformulasReference();
 
     formula_set newOrSet;
-    const formula_set *subformulas = innerOr->getSubformulasReference();
-
-    for (const shared_ptr<Formula> &component : *subformulas) {
-      shared_ptr<Formula> newDiamond =
-          Diamond::create(modality_, power_, component)->S5NormalForm();
-      newOrSet.insert(newDiamond);
+    for (const shared_ptr<Formula> &component : *subs) {
+      auto newDia = Diamond::create(modality_, power_, component);
+      newOrSet.insert(newDia);
     }
-
     return Or::create(newOrSet);
   }
 
-  // --------------------------------------------------
-  // Rule (6): <r>(ψ₁ ∧ … ∧ ψₘ ∧ ⊙φ₁ ∧ … ∧ ⊙φₙ) => <r>(ψ₁ ∧ … ∧ ψₘ) ∧ ⊙φ₁ ∧ … ∧ ⊙φₙ
-  // where ⊙ ∈ {Box, Diamond} and has the same modality as this Diamond.
-  // --------------------------------------------------
-  if (subformula_->getType() == FAnd) {
-    auto innerAnd = dynamic_pointer_cast<And>(subformula_);
-    const formula_set *subformulas = innerAnd->getSubformulasReference();
+  // 2. Rule (6):
+  //    <r>(ψ₁ ∧ … ∧ ψₘ ∧ ⊙φ₁ ∧ … ∧ ⊙φₙ)
+  //      ⇒ <r>(ψ₁ ∧ … ∧ ψₘ) ∧ ⊙φ₁ ∧ … ∧ ⊙φₙ
+  //    where ⊙ ∈ {Box, Diamond} with same modality.
+  if (innerNF->getType() == FAnd) {
+    auto innerAnd = dynamic_pointer_cast<And>(innerNF);
+    const formula_set *subs = innerAnd->getSubformulasReference();
 
-    formula_set propositionalPart;  // the ψ_i
-    formula_set modalPart;          // the ⊙φ_i (Box or Diamond with same modality)
+    formula_set propositionalPart;
+    formula_set modalPart;
     bool hasMatchingModal = false;
 
-    for (const shared_ptr<Formula> &conjunct : *subformulas) {
-      FormulaType t = conjunct->getType();
-
-      bool capturedAsModal = false;
+    for (const shared_ptr<Formula> &c : *subs) {
+      FormulaType t = c->getType();
+      bool captured = false;
 
       if (t == FBox) {
-        auto b = dynamic_pointer_cast<Box>(conjunct);
+        auto b = dynamic_pointer_cast<Box>(c);
         if (b && b->getModality() == modality_) {
-          modalPart.insert(conjunct);
+          modalPart.insert(c);
           hasMatchingModal = true;
-          capturedAsModal = true;
+          captured = true;
         }
       } else if (t == FDiamond) {
-        auto d = dynamic_pointer_cast<Diamond>(conjunct);
+        auto d = dynamic_pointer_cast<Diamond>(c);
         if (d && d->getModality() == modality_) {
-          modalPart.insert(conjunct);
+          modalPart.insert(c);
           hasMatchingModal = true;
-          capturedAsModal = true;
+          captured = true;
         }
       }
 
-      // Anything not treated as a same-modality modal conjunctunct stays under the diamond
-      if (!capturedAsModal) {
-        propositionalPart.insert(conjunct);
+      if (!captured) {
+        propositionalPart.insert(c);
       }
     }
 
     if (hasMatchingModal) {
       formula_set topAnd;
 
-      // Build <r>(ψ₁ ∧ … ∧ ψₘ) if there is any propositional part
+      // Build <r>(ψ-part) if any ψ’s exist
       if (!propositionalPart.empty()) {
-        shared_ptr<Formula> inner;
+        shared_ptr<Formula> innerPsi;
         if (propositionalPart.size() == 1) {
-          inner = *propositionalPart.begin();
+          innerPsi = *propositionalPart.begin();
         } else {
-          inner = And::create(propositionalPart);
+          innerPsi = And::create(propositionalPart);
         }
-
-        shared_ptr<Formula> diaPsi =
-            Diamond::create(modality_, power_, inner)->S5NormalForm();
+        auto diaPsi = Diamond::create(modality_, power_, innerPsi);
         topAnd.insert(diaPsi);
       }
 
-      // Add all ⊙φᵢ outside
+      // Add all ⊙φᵢ
       for (const shared_ptr<Formula> &m : modalPart) {
         topAnd.insert(m);
       }
@@ -190,8 +180,7 @@ shared_ptr<Formula> Diamond::S5NormalForm() {
     }
   }
 
-  // No extra S5-specific transformation applicable
-  return shared_from_this();
+  return Diamond::create(modality_, power_, innerNF);
 }
 
 
