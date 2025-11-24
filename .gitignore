@@ -3,7 +3,7 @@
 *.p
 *.1cf
 *.out
-*.txt
+*.cnf.txt
 *.intohylo
 *.a
 *.cf
