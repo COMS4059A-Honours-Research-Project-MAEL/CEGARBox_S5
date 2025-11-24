@@ -24,9 +24,9 @@ SOLVER_DIRS = {
     "CEGARBox_S5": "CEGARBox_S5",
     "S5PY": "S5PY",
     "S52SAT": "S52SAT",
-    "LCKTab": "LCKS5Prover",  # may not actually have JSON
+    "LCKS5TabProver": "LCKS5Prover",  # may not actually have JSON
 }
-SOLVER_ORDER = ["CEGARBox_S5", "S5PY", "S52SAT", "LCKTab"]
+SOLVER_ORDER = ["CEGARBox_S5", "S5PY", "S52SAT", "LCKS5TabProver"]
 
 
 # -------------------------------------------------------------------
@@ -81,7 +81,7 @@ def aggregate_group(group_dirs, solver_key, ref_solver_key="CEGARBox_S5"):
     Merge all MCNF_* directories in group_dirs for one solver.
 
     If the JSON file for this solver is missing in some family (or for
-    LCKTab which has no JSON at all), we:
+    LCKS5TabProver which has no JSON at all), we:
       - read the reference solver's JSON for that family, and
       - fabricate TL_MS times and "Time limit exceeded" resolutions
         for the same number of instances.
@@ -91,9 +91,9 @@ def aggregate_group(group_dirs, solver_key, ref_solver_key="CEGARBox_S5"):
     resolutions = []
 
     for fam_dir in group_dirs:
-        # try to find the solver's own JSON (except LCKTab which we know has none)
+        # try to find the solver's own JSON (except LCKS5TabProver which we know has none)
         json_candidates = []
-        if solver_key != "LCKTab":
+        if solver_key != "LCKS5TabProver":
             json_candidates = list(
                 (fam_dir / solver_dir).glob(
                     f"{solver_dir}-{fam_dir.name}-results.json"
@@ -161,13 +161,11 @@ def plot_instances_solved(solver_results, time_points_s, title="MCNF Benchmarks"
 
     for res in solver_results:
         counts = instances_solved_vs_time(res, time_points_s)
-        print(time_points_s, counts)
         plt.plot(time_points_s, counts, marker="o", label=res["name"])
 
     plt.xscale("log")
-    plt.xlabel("CPU time in seconds")
+    plt.xlabel("Time (s)")
     plt.ylabel("Instances solved")
-    plt.title(title)
     plt.legend()
     plt.tight_layout()
 
@@ -321,7 +319,7 @@ def print_table_rows(groups):
             f"{stats['CEGARBox_S5'][0]} & {stats['CEGARBox_S5'][1]:.2f} & "
             f"{stats['S5PY'][0]} & {stats['S5PY'][1]:.2f} & "
             f"{stats['S52SAT'][0]} & {stats['S52SAT'][1]:.2f} & "
-            f"{stats['LCKTab'][0]} & {stats['LCKTab'][1]:.2f} \\\\"
+            f"{stats['LCKS5TabProver'][0]} & {stats['LCKS5TabProver'][1]:.2f} \\\\"
         )
         print(row)
         print()
@@ -356,12 +354,18 @@ def main():
         all_results.append(res)
 
     # instances solved vs time (adjust time points if you like)
-    time_points_s = np.array([0.01, 0.1, 1, 10, 60, 180])
+    time_points_s = np.array([
+        0.01, 0.02, 0.05,   # very small times
+        0.1, 0.2, 0.5,      # sub-second
+        1, 2, 5,            # 1–5 seconds
+        10, 20,             # 10–20 seconds
+        60, 180             # 1 minute, full timeout
+    ])
     plot_instances_solved(all_results, time_points_s, title="All MCNF Benchmarks")
 
     # scatter: baseline = CEGARBox_S5
     baseline = all_results[0]          # CEGARBox_S5
-    others = all_results[1:]           # S5PY, S52SAT, LCKTab
+    others = all_results[1:]           # S5PY, S52SAT, LCKS5TabProver
     plot_pairwise_scatter(baseline, others)
 
     plt.show()
